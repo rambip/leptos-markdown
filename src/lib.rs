@@ -2,8 +2,6 @@ use leptos::*;
 use leptos::html::AnyElement;
 use markdown::mdast;
 
-use std::rc::Rc;
-
 mod render;
 use render::{render, MarkdownMouseEvent, RenderContext, HtmlError};
 
@@ -19,7 +17,7 @@ pub fn Markdown(
     onclick: Option<Box<dyn Fn(MarkdownMouseEvent)>>,
 
     #[prop(optional)] 
-    render_links: Option<Box<dyn Fn(Scope, mdast::Link) -> 
+    render_links: Option<Box<dyn Fn(mdast::Link) -> 
     Result<HtmlElement<AnyElement>, HtmlError>>>,
 
     #[prop(optional)] 
@@ -47,11 +45,16 @@ pub fn Markdown(
 
     let parse_options = new_parse_options(constructs);
 
+
     view! {cx,
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" crossorigin="anonymous"/>
         <div style="width:100%"> 
-            {move || src.with(
-                    |x| render(parse(x, &parse_options, wikilinks), &context))}
+            {move || src.with( |x| {
+                    let ast = parse(x, &parse_options, wikilinks);
+                    log!("{:?}", ast);
+                    render(ast, &context)
+                })
+            }
         </div>
     }
 }

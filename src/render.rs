@@ -55,7 +55,7 @@ pub struct RenderContext {
     onclick: Rc<dyn Fn(MarkdownMouseEvent)>,
 
     /// callback used to render links
-    render_links: Option<Box<dyn Fn(Scope, mdast::Link) -> Result<Html, HtmlError>>>,
+    render_links: Option<Box<dyn Fn(mdast::Link) -> Result<Html, HtmlError>>>,
 }
 
 
@@ -63,7 +63,7 @@ impl RenderContext
 {
     pub fn new(cx: Scope, theme_name: Option<String>, 
                onclick: Option<Box<dyn Fn(MarkdownMouseEvent)>>,
-               render_links: Option<Box<dyn Fn(Scope, mdast::Link) -> Result<Html,HtmlError>>>)
+               render_links: Option<Box<dyn Fn(mdast::Link) -> Result<Html,HtmlError>>>)
 -> Self 
 {
         let theme_set = ThemeSet::load_defaults();
@@ -175,7 +175,7 @@ fn render_links(context: &RenderContext, link: mdast::Link) -> Result<Html, Html
 {
     let cx = context.cx;
     match &context.render_links {
-        Some(f) => f(context.cx, link),
+        Some(f) => f(link),
         None => Ok(view!{cx,
                 <a href={link.url}>
                     {render_children(context, &link.children)?}
@@ -285,9 +285,9 @@ fn render_node<'a>(context: &RenderContext, node: &'a Node) -> Result<Html, Html
             let child = render_children(context, &n.children)?;
             // TODO: why fragment does not have into_any() ?
             view!{cx,
-            <ul>
+            <p>
                 {child}
-            </ul>
+            </p>
             }.into_any()
         },
         Node::BlockQuote(n) => view!{cx,
@@ -313,10 +313,14 @@ fn render_node<'a>(context: &RenderContext, node: &'a Node) -> Result<Html, Html
             render_children(context, &n.children)?
         ),
         Node::ThematicBreak(_) => view!{cx, <hr/>}.into_any(),
-        Node::Paragraph(n) => view!{cx, 
-            <p>{render_children(context, &n.children)?}</p>
-        }.into_any(),
-
+        Node::Paragraph(n) => match &n.children[..] {
+                [x] => render_node(context, x)?,
+                children => view!{cx,
+                    <span>
+                        {render_children(context, &children)?}
+                    </span>
+                }.into_any()
+        },
         Node::List(n) if n.ordered => view!{cx,
             <ol start={n.start.unwrap_or(0).to_string()}>
             {render_children(context, &n.children)?} 
