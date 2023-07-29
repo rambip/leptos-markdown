@@ -11,6 +11,7 @@ use leptos::*;
         <Markdown src=content/>
     }
 }
+```
 
 # Examples
 Look at `./examples/`
