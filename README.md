@@ -16,7 +16,7 @@ use leptos::*;
 # Examples
 Look at `./examples/`
 
-There is a demo of an interactive editor [here](https://rambip.github.io/yew-markdown/editor)
+There is a demo of an interactive editor [here](https://rambip.github.io/leptos-markdown/editor)
 
 
 # Comparison
