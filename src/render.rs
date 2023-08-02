@@ -409,9 +409,7 @@ fn render_link(context: &RenderContext, link: LinkDescription)
             }.into_any()
         ),
         (None, true) => Ok(view!{cx,
-                <image href={link.url} alt=link.title>
-                    {link.content}
-                </image>
+                <img src={link.url} alt=link.title/>
             }.into_any()
         )
     }
