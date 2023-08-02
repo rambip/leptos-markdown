@@ -44,6 +44,13 @@ To be fair, this is not the vanilla component, there is a bit of styling added.
 
 There is a demo of an interactive editor [here](https://rambip.github.io/leptos-markdown/editor)
 
+## Onclick
+`./examples/onclick/`
+
+Illustrates a cool feature of this crate: `onclick` events for any rendered content
+
+Try it [here](https://rambip.github.io/leptos-markdown/onclick)
+
 
 # Comparison
 This project was great to compare the advantages and drawbacks of the two major rust web frameworks !
