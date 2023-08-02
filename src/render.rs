@@ -2,38 +2,30 @@ use leptos::*;
 use leptos::html::AnyElement;
 
 use std::rc::Rc;
+use core::ops::Range;
 
-use markdown::{mdast, mdast::{Node, AlignKind, TableRow, TableCell}, unist::Point};
 use katex;
 use syntect::parsing::SyntaxSet;
 use syntect::highlighting::{ThemeSet, Theme};
 
 use web_sys::MouseEvent;
 
+use pulldown_cmark::{Event, Tag, CodeBlockKind, Alignment, MathDisplay, HeadingLevel};
+
+use crate::utils::as_closing_tag;
+use super::{LinkDescription, MarkdownMouseEvent};
+
 type Html = HtmlElement<AnyElement>;
 
-/// `mouse_event` -> the original mouse event triggered when a text element was clicked on
-/// `start_position: Point` -> the corresponding starting position in the markdown source
-/// `end_position: Point` -> the corresponding ending position in the markdown source
-#[derive(Clone, Debug)]
-pub struct MarkdownMouseEvent {
-    pub mouse_event: MouseEvent,
-    pub start_position: Point,
-    pub end_position: Point,
-}
 
-
-pub fn make_callback(context: &RenderContext, position: &Option<markdown::unist::Position>) 
+pub fn make_callback(context: &RenderContext, position: Range<usize>) 
     -> impl Fn(MouseEvent) + 'static 
 {
-    let position = position.clone()
-        .expect("unable to know from which position the markdown tree was build");
     let onclick = context.onclick.clone();
     move |x| {
         let click_event = MarkdownMouseEvent {
             mouse_event: x,
-            start_position: position.start.clone(),
-            end_position: position.end.clone(),
+            position: position.clone()
         };
         onclick(click_event)
     }
@@ -41,7 +33,6 @@ pub fn make_callback(context: &RenderContext, position: &Option<markdown::unist:
 
 
 /// all the context needed to render markdown:
-/// - `syntax_set`, `theme`, `onclick`, `render_links`, `katex_opts`
 pub struct RenderContext {
     cx: Scope,
 
@@ -55,7 +46,7 @@ pub struct RenderContext {
     onclick: Rc<dyn Fn(MarkdownMouseEvent)>,
 
     /// callback used to render links
-    render_links: Option<Box<dyn Fn(mdast::Link) -> Result<Html, HtmlError>>>,
+    render_links: Option<Box<dyn Fn(LinkDescription) -> Result<Html, HtmlError>>>,
 }
 
 
@@ -63,7 +54,7 @@ impl RenderContext
 {
     pub fn new(cx: Scope, theme_name: Option<String>, 
                onclick: Option<Box<dyn Fn(MarkdownMouseEvent)>>,
-               render_links: Option<Box<dyn Fn(mdast::Link) -> Result<Html,HtmlError>>>)
+               render_links: Option<Box<dyn Fn(LinkDescription) -> Result<Html,HtmlError>>>)
 -> Self 
 {
         let theme_set = ThemeSet::load_defaults();
@@ -90,159 +81,6 @@ impl RenderContext
     }
 }
 
-pub fn render(ast: mdast::Node, context: &RenderContext) 
-    -> Html
-{
-    let cx = context.cx;
-    match render_node(context, &ast) {
-        Ok(x) => x,
-        Err(HtmlError(s)) => 
-            view!(cx,
-                  <div style="border:2px solid red">
-                    {s}
-                  </div>
-        ).into_any()
-    }
-}
-
-
-/// convert the input string or &str directly to an html node
-fn raw_html(cx: Scope, text: String) -> HtmlElement<AnyElement> {
-    view!(cx,
-          <div inner_html=text>
-          </div>
-    ).into_any()
-}
-
-
-/// `highlight_code(content, ss, ts)` render the content `content`
-/// with syntax highlighting
-fn highlight_code(content: &str, lang: Option<&str>, context: &RenderContext) -> Option<Html> {
-    Some( raw_html(context.cx, 
-        syntect::html::highlighted_html_for_string(
-            content,
-            &context.syntax_set, 
-            context.syntax_set.find_syntax_by_token(lang?)?,
-            &context.theme
-            ).ok()?
-    ))
-}
-
-
-/// `render_header(d, s)` returns the html corresponding to
-/// the string `s` inside a html header with depth `d`
-fn render_header<I: IntoView>(cx: Scope, depth: u8, content: I) -> Html {
-    match depth {
-        1 => view!{cx, <h1>{content}</h1>}.into_any(),
-        2 => view!{cx, <h2>{content}</h2>}.into_any(),
-        3 => view!{cx, <h3>{content}</h3>}.into_any(),
-        4 => view!{cx, <h4>{content}</h4>}.into_any(),
-        5 => view!{cx, <h5>{content}</h5>}.into_any(),
-        6 => view!{cx, <h6>{content}</h6>}.into_any(),
-        _ => panic!("maximum heading level exceeded")
-    }
-}
-
-
-/// `render_maths(content)` returns a html node
-/// with the latex content `content` compiled inside
-fn render_maths(cx: Scope, content: &str, display_mode: bool) 
-    -> Result<Html, HtmlError>{
-    let opts = katex::Opts::builder()
-        .display_mode(display_mode)
-        .build()
-        .unwrap();
-
-    match katex::render_with_opts(content, opts){
-        Ok(x) => Ok(raw_html(cx, x)),
-        Err(_) => HtmlError::err("invalid math")
-    }
-}
-
-// fn extract_text(node: &mdast::Node) -> String {
-//     match node {
-//         Node::Text(t) => t.value.clone(),
-//         _ => node.children()
-//             .iter()
-//             .map(|x| x.iter())
-//             .flatten()
-//             .map(extract_text)
-//             .collect()
-//     }
-// }
-
-fn render_links(context: &RenderContext, link: mdast::Link) -> Result<Html, HtmlError> 
-{
-    let cx = context.cx;
-    match &context.render_links {
-        Some(f) => f(link),
-        None => Ok(view!{cx,
-                <a href={link.url}>
-                    {render_children(context, &link.children)?}
-                </a>
-            }.into_any())
-    }
-}
-
-
-/// `align_string(align)` gives the css string
-/// that is used to align text according to `align`
-fn align_string(align: &AlignKind) -> &'static str {
-    match align {
-        AlignKind::Left => "text-align: left",
-        AlignKind::Right => "text-align: right",
-        AlignKind::Center => "text-align: center",
-        AlignKind::None => "",
-    }
-}
-
-/// `render_cell(cell, align, context)` renders cell as html,
-/// and use `align` to 
-fn render_cell<'a> (context: &RenderContext, cell: &'a TableCell, align: &'a AlignKind) -> Result<Html, HtmlError> {
-    let cx = context.cx;
-
-    let html_children = cell.children.iter()
-        .map(|x| render_node(context, x))
-        .collect::<Result<Vec<_>, _>>()?
-        .collect_view(cx);
-
-    Ok(view!{ cx,
-        <td style={align_string(align)}>
-            {html_children}
-        </td>
-    }.into_any())
-}
-
-/// `render_table_row(row, align, context)` 
-/// renders the markdown element `row` to html 
-/// using `align` to align each cell.
-/// `context` is used to render the child components
-fn render_table_row<'a> (
-        context: &RenderContext,
-        row: &'a TableRow, 
-        aligns: &Vec<AlignKind>, 
-    ) -> Html {
-    use core::iter::zip;
-
-    let unwrap_cell = |node: &'a Node| match node {
-        Node::TableCell(t) => t, 
-        _ => panic!("table row contains ... that is not a cell"),
-    };
-
-    let cells = row.children.iter()
-        .map(|x| unwrap_cell(x));
-
-    let cx = context.cx;
-    view!{ cx,
-        <tr>
-            {zip(cells, aligns)
-                .map(|(c, a)| render_cell(context, c, a))
-                .collect::<Result<Vec<_>,_>>()
-                .collect_view(cx)
-            }
-        </tr>
-    }.into_any()
-}
 
 pub struct HtmlError(String);
 
@@ -252,173 +90,352 @@ impl HtmlError {
     }
 }
 
-fn render_children(context: &RenderContext, children: &[Node]) -> Result<View, HtmlError> {
+impl ToString for HtmlError {
+    fn to_string(&self) -> String {
+        self.0.to_owned()
+    }
+}
+
+
+use Event::*;
+
+
+
+pub struct Renderer<'a>{
+    context: &'a RenderContext,
+    stream: core::slice::Iter<'a, (Event<'a>, Range<usize>)>,
+    column_alignment: Option<&'a [Alignment]>,
+    cell_index: usize,
+}
+
+impl<'a> Iterator for Renderer<'a> 
+{
+    type Item = Html;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let cx = self.context.cx;
+        let (item, range) = self.stream.next()? ;
+        let range = range.clone();
+
+        let rendered = match item {
+            Start(t) => self.render_tag(t, range),
+            End(_) => panic!("not supposed to get `End` event here"),
+            Text(s) => Ok(render_text(self.context, &s, range)),
+            Code(s) => Ok(render_code(self.context, &s, range)),
+            Html(s) => Ok(render_html(self.context, &s, range)),
+            FootnoteReference(_) => HtmlError::err("do not support footnote refs yet"),
+            SoftBreak => Ok(self.next()?),
+            HardBreak => Ok(view!{cx, <br/>}.into_any()),
+            Rule => Ok(render_rule(self.context, range)),
+            TaskListMarker(_) => HtmlError::err("do not support todo lists yet"),
+            Math(disp, content) => render_maths(self.context, &content, &disp, range),
+        };
+
+        Some(
+            rendered.unwrap_or_else(|e| view!{cx,
+                <div class="error">
+                    <p>"got this error while rendering markdown"</p>
+                    <span>{e.to_string()}</span>
+                </div>
+                }.into_any()
+            )
+        )
+    }
+}
+
+
+impl<'a> Renderer<'a> 
+{
+    pub fn new(context: &'a RenderContext, events: &'a [(Event<'a>, Range<usize>)])-> Self 
+    {
+        Self {
+            context,
+            stream: events.iter(),
+            column_alignment: None,
+            cell_index: 0,
+        }
+    }
+
+    fn extract_until_tag(&mut self, tag: &'a Tag<'a>) -> &'a [(Event<'a>, Range<usize>)] {
+        let all_events = self.stream.as_slice();
+
+        let closing_tag = as_closing_tag(tag);
+        let closing_index = 
+            all_events
+            .iter()
+            .position(|(x, _)| *x == Event::End(closing_tag))
+            .expect("unable to find corresponding closing tag");
+
+        let (children_events, rest) = &all_events.split_at(closing_index);
+
+        self.stream = rest.iter();
+        self.stream.next().expect("this item should be the closing tag");
+
+        children_events
+    }
+
+    fn children(&mut self, tag: &'a Tag<'a>) -> View {
+        let children_events = self.extract_until_tag(tag);
+
+        let sub_renderer = Renderer {
+            context: self.context,
+            stream: children_events.into_iter(),
+            column_alignment: self.column_alignment,
+            cell_index: 0,
+        };
+        sub_renderer.collect_view(self.context.cx)
+    }
+
+    fn children_text(&mut self, tag: &'a Tag<'a>) -> Option<String> {
+        let children_events = self.extract_until_tag(tag);
+
+        match children_events {
+            [(Event::Text(s), _)] => Some(s.to_string()),
+            [] => None,
+            _ => panic!("expected string event, got something else")
+        }
+    }
+
+    fn render_tag(&mut self, tag: &'a Tag<'a>, range: Range<usize>) 
+    -> Result<Html, HtmlError> 
+    {
+        let cx = self.context.cx;
+
+        Ok(match tag {
+            Tag::Paragraph => view!{cx, <p>{self.children(tag)}</p>}.into_any(),
+            Tag::Heading{level, ..} => render_heading(cx, *level, self.children(tag))
+            ,
+            Tag::BlockQuote => view!{cx,
+                <blockquote>
+                    {self.children(tag)}
+                </blockquote>
+            }.into_any(),
+            Tag::CodeBlock(k) => 
+                render_code_block(self.context, self.children_text(tag), &k,range),
+            Tag::List(Some(n0)) => view!{cx, 
+                <ol start=*n0 as i32>
+                    {self.children(tag)}
+                </ol>}
+            .into_any(),
+            Tag::List(None) => view!{cx, <ul>{self.children(tag)}</ul>}
+                .into_any(),
+            Tag::Item => view!{cx, <li>{self.children(tag)}</li>}.into_any(),
+            Tag::Table(align) => {
+                self.column_alignment = Some(align);
+                view!{cx, <table>{self.children(tag)}</table>}.into_any()
+            }
+            Tag::TableHead => {
+                view!{cx,
+                    <thead>{self.children(tag)}</thead>
+                }.into_any()
+            },
+            Tag::TableRow => {
+                view!{cx,
+                    <tr>{self.children(tag)}</tr>
+                }.into_any()
+            }
+            Tag::TableCell => {
+                let align = self.column_alignment.unwrap()[self.cell_index];
+                self.cell_index += 1;
+                render_cell(self.context, self.children(tag), &align)
+            }
+            Tag::Emphasis => view!{cx, <i>{self.children(tag)}</i>}.into_any(),
+            Tag::Strong => view!{cx, <b>{self.children(tag)}</b>}.into_any(),            
+            Tag::Strikethrough => view!{cx, <s>{self.children(tag)}</s>}.into_any(),            
+            Tag::Image(t, url, title) => {
+                let description = LinkDescription {
+                    url: url.to_string(),
+                    title: title.to_string(),
+                    content: self.children(tag),
+                    link_type: *t,
+                    image: true,
+                };
+                render_link(self.context, description)?
+            },
+            Tag::Link(t, url, title) => {
+                let description = LinkDescription {
+                    url: url.to_string(),
+                    title: title.to_string(),
+                    content: self.children(tag),
+                    link_type: *t,
+                    image: false,
+                };
+                render_link(self.context, description)?
+            },
+            Tag::FootnoteDefinition(_) => return HtmlError::err("footnote: not implemented"),
+            Tag::MetadataBlock{..} => {
+                let _ = self.children(tag);
+                view!{cx, <div></div>}.into_any()
+            }
+        })
+    }
+}
+
+
+
+fn render_rule(context: &RenderContext, range: Range<usize>) -> Html{
     let cx = context.cx;
-    Ok(children
-        .iter()
-        .map(|x| render_node(context, x))
-        .collect::<Result<Vec<_>, _>>()?
-        .collect_view(cx)
+    let callback = make_callback(context, range);
+    view!{cx, <hr on:click=callback/>}
+    .into_any()
+}
+
+
+fn render_html(context: &RenderContext, s: &str, range: Range<usize>) -> Html{
+    let cx = context.cx;
+    let callback = make_callback(context, range);
+    view!{cx, 
+        <div on:click=callback inner_html={s.to_string()}>
+        </div>
+    }.into_any()
+}
+
+fn render_code(context: &RenderContext, s: &str, range: Range<usize>) -> Html{
+    let cx = context.cx;
+    let callback = make_callback(context, range);
+    view!{cx, <code on:click=callback>{s.to_string()}</code>}
+          .into_any()
+}
+
+fn render_text(context: &RenderContext, s: &str, range: Range<usize>) -> Html{
+    let cx = context.cx;
+    let callback = make_callback(context, range);
+    view!{cx, 
+        <span on:click=callback>
+            {s.to_string()}
+        </span>
+    }.into_any()
+}
+
+
+fn render_code_block(context: &RenderContext, 
+                     string_content: Option<String>,
+                     k: &CodeBlockKind,
+                     range: Range<usize>
+    ) -> Html {
+    let cx = context.cx;
+    let content = match string_content {
+        Some(x) => x,
+        None => return view!{cx,
+            <code></code>
+        }
+        .into_any(),
+    };
+
+    let callback = make_callback(context, range);
+
+    match highlight_code(context, &content, &k) {
+        None => view!{cx,
+        <code on:click=callback>
+            <pre inner_html=content.to_string()></pre>
+        </code>
+        }.into_any(),
+        Some(x) => view!{cx, 
+            <div on:click=callback inner_html=x>
+                </div>
+        }.into_any()
+    }
+}
+
+
+/// `highlight_code(content, ss, ts)` render the content `content`
+/// with syntax highlighting
+fn highlight_code(context: &RenderContext, content: &str, kind: &CodeBlockKind) -> Option<String> {
+    let lang = match kind {
+        CodeBlockKind::Fenced(x) => x,
+        CodeBlockKind::Indented => return None
+    };
+    Some(
+        syntect::html::highlighted_html_for_string(
+            content,
+            &context.syntax_set, 
+            context.syntax_set.find_syntax_by_token(lang)?,
+            &context.theme
+            ).ok()?
     )
 }
 
-/// `render_node(node, context)` returns an html view
-/// of the markdown abstract syntax tree `node`.
-/// It uses all the context present in `context`
-fn render_node<'a>(context: &RenderContext, node: &'a Node) -> Result<Html, HtmlError> 
-{
-    let cx = context.cx;
 
-    Ok(match node {
-        Node::Html(n) => raw_html(context.cx, n.value.clone()),
-
-        Node::Text(n) => {
-            let onclick = make_callback(context, &n.position);
-            view!{cx,
-            <span on:click=onclick>
-                {n.value.clone()}
-            </span>
-            }.into_any()
-        },
-
-        Node::Root(n) => {
-            let child = render_children(context, &n.children)?;
-            // TODO: why fragment does not have into_any() ?
-            view!{cx,
-            <p>
-                {child}
-            </p>
-            }.into_any()
-        },
-        Node::BlockQuote(n) => view!{cx,
-            <blockquote> { render_children(context, &n.children)?} </blockquote>
-        }.into_any(),
-
-        Node::FootnoteDefinition(_) => todo!(),
-
-        Node::Break(_) => view!{cx, <br/>}.into_any(),
-        Node::Delete(n) => view!{cx,
-            <s>{render_children(context, &n.children)?}</s>
-        }.into_any(),
-        Node::Emphasis(n) => view!{cx,
-            <i>{render_children(context, &n.children)?}</i>
-        }.into_any(),
-        Node::Strong(n) => view!{cx,
-            <b>{render_children(context, &n.children)?}</b>
-        }.into_any(),
-
-        Node::Heading(n) => render_header(
-            context.cx,
-            n.depth, 
-            render_children(context, &n.children)?
-        ),
-        Node::ThematicBreak(_) => view!{cx, <hr/>}.into_any(),
-        Node::Paragraph(n) => match &n.children[..] {
-                [x] => render_node(context, x)?,
-                children => view!{cx,
-                    <span>
-                        {render_children(context, &children)?}
-                    </span>
-                }.into_any()
-        },
-        Node::List(n) if n.ordered => view!{cx,
-            <ol start={n.start.unwrap_or(0).to_string()}>
-            {render_children(context, &n.children)?} 
-            </ol>
-        }.into_any(),
-
-        Node::List(n) => view!{cx,
-            <ul> {render_children(context, &n.children)?} </ul>
-        }.into_any(),
-        Node::ListItem(n) => view!{cx,
-            <li>{render_children(context, &n.children)?}</li>
-        }.into_any(),
-
-        Node::TableRow(n) => view!{cx,
-            <tr>{render_children(context, &n.children)?}</tr>
-        }.into_any(),
-        Node::TableCell(n) => view!{cx,
-            <td>{render_children(context, &n.children)?}</td>
-        }.into_any(),
-
-        Node::Image(n) => view!{cx,
-            <img src={n.url.clone()} alt={n.alt.clone()}/>
-        }.into_any(),
-        // TODO: what to do about `n.title` ?
-        Node::Link(n) => render_links(context, n.clone())?,
-
-        Node::InlineCode(c) => {
-            let onclick = make_callback(context, &c.position);
-
-            view!{cx,
-                <code on:click=onclick>
-                    {c.value.clone()}
-                </code>
-            }
-        }.into_any(),
-        Node::Code(c) => {
-            let code_content = 
-                highlight_code(&c.value, c.lang.as_deref(), context) 
-                .unwrap_or_else(|| raw_html(cx, c.value.clone()));
-
-            let onclick = make_callback(context, &c.position);
-
-            view!{cx,
-                <code on:click=onclick>
-                    <pre>{code_content}</pre>
-                </code>
-            }
-        }.into_any(),
-
-        Node::Math(m) => {
-            let onclick = make_callback(context, &m.position);
-            let math = render_maths(context.cx, &m.value, true)?;
-            view!{cx,
-                <div class={"math-flow"} on:click=onclick>
-                    {math}
-                </div>
-            }
-        }.into_any(),
-
-        Node::InlineMath(m) => {
-            let onclick = make_callback(context, &m.position);
-            view!{cx,
-                <span class={"math-inline"} on:click=onclick>
-                {render_maths(cx, &m.value, false)?}
-                </span>
-            }.into_any()
-        },
-
-        Node::Table(t) => {
-            let unwrap_row = |node: &'a Node| match node {
-                Node::TableRow(x) => x,
-                _ => panic!("the table contains something that is not a row"),
-            };
-            let rows = t.children.iter()
-                .map(|c| render_table_row(context, &unwrap_row(c), &t.align))
-                .collect_view(cx);
-
-            view!{cx,
-                <table>
-                    {rows}
-                </table>
-            }.into_any()
-        },
-        Node::FootnoteReference(_) => return HtmlError::err("footnote: not implemented"),
-        Node::ImageReference(_) => return HtmlError::err("image ref: not implemented"),
-        Node::LinkReference(_) => return HtmlError::err("link ref: not implemented"),
-        Node::Definition(_) => return HtmlError::err("definition: not implemented"),
-
-        // invisible
-        Node::Toml(_) |
-        Node::Yaml(_) => view!{cx, <div></div>}.into_any(),
-
-        Node::MdxJsxTextElement(_) |
-        Node::MdxTextExpression(_) |
-        Node::MdxjsEsm(_) |
-        Node::MdxJsxFlowElement(_) |
-        Node::MdxFlowExpression(_)
-            => return HtmlError::err("this part contain Mdx syntax, not yet implemented")
-    })
+/// `render_header(d, s)` returns the html corresponding to
+/// the string `s` inside a html header with depth `d`
+fn render_heading<I: IntoView>(cx: Scope, level: HeadingLevel, content: I) -> Html {
+    use HeadingLevel::*;
+    match level {
+        H1 => view!{cx, <h1>{content}</h1>}.into_any(),
+        H2 => view!{cx, <h2>{content}</h2>}.into_any(),
+        H3 => view!{cx, <h3>{content}</h3>}.into_any(),
+        H4 => view!{cx, <h4>{content}</h4>}.into_any(),
+        H5 => view!{cx, <h5>{content}</h5>}.into_any(),
+        H6 => view!{cx, <h6>{content}</h6>}.into_any(),
+    }
 }
 
+
+/// `render_maths(content)` returns a html node
+/// with the latex content `content` compiled inside
+fn render_maths(context: &RenderContext, content: &str, display_mode: &MathDisplay, range: Range<usize>) 
+    -> Result<Html, HtmlError>{
+    let opts = katex::Opts::builder()
+        .display_mode(*display_mode == MathDisplay::Block)
+        .build()
+        .unwrap();
+
+    let class_name = match display_mode {
+        MathDisplay::Inline => "math-inline",
+        MathDisplay::Block => "math-flow",
+    };
+
+    let callback = make_callback(context, range);
+    let cx = context.cx;
+
+    match katex::render_with_opts(content, opts){
+        Ok(x) => Ok(view!{cx,
+            <div inner_html=x class=class_name on:click=callback></div>
+        }.into_any()),
+        Err(_) => HtmlError::err("invalid math")
+    }
+}
+
+fn render_link(context: &RenderContext, link: LinkDescription) 
+    -> Result<Html, HtmlError> 
+{
+    let cx = context.cx;
+    match (&context.render_links, link.image) {
+        (Some(f), _) => f(link),
+        (None, false) => Ok(view!{cx,
+                <a href={link.url}>
+                    {link.content}
+                </a>
+            }.into_any()
+        ),
+        (None, true) => Ok(view!{cx,
+                <image href={link.url} alt=link.title>
+                    {link.content}
+                </image>
+            }.into_any()
+        )
+    }
+}
+
+/// `align_string(align)` gives the css string
+/// that is used to align text according to `align`
+fn align_string(align: &Alignment) -> &'static str {
+    match align {
+        Alignment::Left => "text-align: left",
+        Alignment::Right => "text-align: right",
+        Alignment::Center => "text-align: center",
+        Alignment::None => "",
+    }
+}
+
+/// `render_cell(cell, align, context)` renders cell as html,
+/// and use `align` to 
+fn render_cell<'a> (context: &RenderContext, content: View, align: &'a Alignment) -> Html{
+    let cx = context.cx;
+
+    view!{ cx,
+        <td style={align_string(align)}>
+            {content}
+        </td>
+    }.into_any()
+}

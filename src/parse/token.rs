@@ -1,4 +1,4 @@
-pub use markdown::unist::{Point, Position};
+use core::ops::Range;
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -7,26 +7,14 @@ pub enum Token {
     LBra,
     RRBra,
     LLBra,
-    Word(String),
+    Word,
     NewLine,
 }
 
 use Token::*;
 
-impl ToString for Token {
-    fn to_string(&self) -> String {
-        match self {
-            Pipe => "|".into(),
-            RBra => "]".into(),
-            LBra => "[".into(),
-            RRBra => "]]".into(),
-            LLBra => "[[".into(),
-            Word(s) => s.clone(),
-            NewLine => "\n".into(),
-        }
-    }
-}
-
+/// possible states of the state machine.
+/// This implementation is almost a pure DFA
 enum State {
     Default,
     AfterPipe,
@@ -36,7 +24,7 @@ enum State {
     AfterClose1,
     AfterClose2,
     AfterClose3,
-    AfterSymbol(String),
+    AfterSymbol,
     AfterReturn,
 }
 
@@ -47,6 +35,8 @@ impl Default for State {
 }
 
 impl State {
+    /// `s.finalize()` returns the extra token that would be returned
+    /// if the stream ended in the state `s`
     fn finalize(self: State) -> Option<Token> {
         use State::*;
 
@@ -58,7 +48,7 @@ impl State {
             AfterClose1 => RBra,
             AfterClose2 => RRBra,
             AfterClose3 => RBra,
-            AfterSymbol(s) => Word(s),
+            AfterSymbol => Word,
             AfterReturn => NewLine,
             Default => return None,
         })
@@ -66,37 +56,34 @@ impl State {
 }
 
 
-fn advance(point: &mut Point, c: char) {
-    if c == '\n' {
-        point.line += 1;
-        point.column = 1;
-    }
-    else {
-        point.column += c.len_utf8();
-    }
-    point.offset += c.len_utf8();
-}
-
-pub struct TokenStream<'a> {
-    source: core::str::Chars<'a>,
-    cursor: Point,
+pub struct Lexer<'a> {
+    /// the state of the automata
     state: State,
-    last_token_end: Point,
+
+    /// the stream of characacters to parse
+    source: core::str::Chars<'a>,
+
+    /// the current position inside the original slice of text.
+    /// Each time a char `c` is read, the cursor increase by the utf8 size of `c`
+    cursor: usize,
+
+    /// last time a token was returned
+    last_token_end: usize,
 }
 
-impl<'a> TokenStream<'a> {
-    pub fn new_at(source: &'a str, point: Point) -> TokenStream<'a> {
-        TokenStream {
+impl<'a> Lexer<'a> {
+    pub fn new_at(source: &'a str, index: usize) -> Lexer<'a> {
+        Lexer {
             source: source.chars(),
-            cursor: point.clone(),
+            cursor: index,
             state: State::Default,
-            last_token_end: point.clone()
+            last_token_end: index,
         }
     }
 }
 
-impl<'a> Iterator for TokenStream<'a> {
-    type Item = (Token, Position);
+impl<'a> Iterator for Lexer<'a> {
+    type Item = (Token, Range<usize>);
 
     fn next(&mut self) -> Option<Self::Item> {
         use State::*;
@@ -117,23 +104,20 @@ impl<'a> Iterator for TokenStream<'a> {
                 (']', s@AfterClose3)=> (AfterClose3, Some(s)),
                 (']', s)            => (AfterClose1, Some(s)),
                 ('|', s)            => (AfterPipe, Some(s)),
-                (c, AfterSymbol(mut s)) => {
-                    s.push(c);
-                    (AfterSymbol(s), None)
-                }
-                (c, s) => (AfterSymbol(c.into()), Some(s))
+                (_, AfterSymbol) => (AfterSymbol, None),
+                (_, s) => (AfterSymbol, Some(s))
 
             };
 
             self.state = new_state;
 
             let last_cursor = self.cursor.clone();
-            advance(&mut self.cursor, c);
+            self.cursor += c.len_utf8();
 
             if let Some(t) = state_to_finalize.and_then(|x| x.finalize()) {
 
-                let position = Position {
-                    end: last_cursor.clone(),
+                let position = Range {
+                    end: last_cursor,
                     start: std::mem::replace(&mut self.last_token_end, last_cursor),
                 };
 
@@ -142,9 +126,9 @@ impl<'a> Iterator for TokenStream<'a> {
         }
 
         if let Some(t) = std::mem::take(&mut self.state).finalize() {
-            let position = Position {
+            let position = Range {
                 start: std::mem::replace(&mut self.last_token_end, self.cursor.clone()),
-                end: self.cursor.clone(),
+                end: self.cursor,
             };
             return Some((t, position));
         }
@@ -160,21 +144,21 @@ mod tests {
     #[wasm_test]
     fn test_stream(){
         let source = "[abc] [[ d e]]\nb";
-        let stream: Vec<Token> = TokenStream::new_at(source, Point::new(1,1,0))
+        let stream: Vec<Token> = Lexer::new_at(source, 0)
             .map(|(t, _)| t)
             .collect();
         println!("{stream:?}");
         assert_eq!(stream, 
                    vec![
                        LBra, 
-                       Word("abc".into()),
+                       Word,
                        RBra, 
-                       Word(" ".into()), 
+                       Word,
                        LLBra,  
-                       Word(" d e".into()), 
+                       Word,
                        RRBra, 
                        NewLine, 
-                       Word("b".into()), 
+                       Word,
                    ]
         );
     }
@@ -182,16 +166,39 @@ mod tests {
     #[wasm_test]
     fn test_stream_double_bracket(){
         let source = "[[[";
-        let stream: Vec<(Token, Position)> 
-            = TokenStream::new_at(source, Point::new(1,1,0)).collect();
+        let stream: Vec<(Token, _)> 
+            = Lexer::new_at(source, 0).collect();
 
         println!("{stream:?}");
         assert_eq!(stream, 
                    vec![
-                       (LLBra, Position::new(1,1,0, 1,3,2)), 
-                       (LBra, Position::new(1,3,2, 1,4,3)), 
+                       (LLBra, 0..2), 
+                       (LBra, 2..3), 
                    ]
         );
+    }
+
+    #[wasm_test]
+    fn lexer_emoji(){
+        let source = "[[the url| with a strange content |😈| inside]]";
+        let stream : Vec<_> =
+            Lexer::new_at(source, 0)
+            .map(|(token, range)| (token, &source[range]))
+            .collect();
+
+        println!("{stream:?}");
+        assert_eq!(stream,
+                   vec![
+                   (LLBra, "[["), 
+                   (Word, "the url"), 
+                   (Pipe, "|"), 
+                   (Word, " with a strange content "), 
+                   (Pipe, "|"), 
+                   (Word, "😈"), 
+                   (Pipe, "|"), 
+                   (Word, " inside"), 
+                   (RRBra, "]]")
+                   ]);
     }
 }
 

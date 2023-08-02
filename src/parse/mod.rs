@@ -1,236 +1,238 @@
-use markdown::{Constructs, ParseOptions, mdast, mdast::Node};
+use pulldown_cmark::{Options, Parser, Event, Tag, TagEnd, LinkType};
+use core::ops::Range;
+
 mod token;
-use token::{TokenStream, Token, Point, Position};
-use core::iter::Peekable;
+use token::{Lexer, Token};
 
-pub fn default_constructs() -> Constructs {
-    Constructs {
-        // enabled by default
-        html_flow: true,
-        list_item: true,
-        math_flow: true,
-        math_text: true,
-        attention: true,
-        thematic_break: true,
-        frontmatter: true,
-        block_quote: true,
-        character_escape: true,
-        code_fenced: true,
-        code_text: true,
-        character_reference: true,
-        gfm_strikethrough: true,
-        autolink: true,
-        gfm_autolink_literal: true,
-        heading_atx: true,
-        heading_setext: true,
-        label_start_image: true,
-        label_start_link: true,
-        label_end: true,
-        gfm_table: true,
-        // see `preprocess_hardbreaks`
-        hard_break_trailing: true,
-
-        // TODO
-        definition: false,
-        gfm_task_list_item: false,
-        gfm_footnote_definition: false,
-        gfm_label_start_footnote: false,
-
-        // maybe one day
-        mdx_esm: false,
-        mdx_expression_flow: false,
-        mdx_expression_text: false,
-        mdx_jsx_flow: false,
-        mdx_jsx_text: false,
-
-        // not supported by default
-        code_indented: false,
-        hard_break_escape: false,
-        html_text: false,
-
-    }
-}
-
-pub fn new_parse_options(constructs: markdown::Constructs) -> ParseOptions {
-    ParseOptions{
-        constructs,
-        gfm_strikethrough_single_tilde: true,
-        math_text_single_dollar: true,
-        mdx_expression_parse: None,
-        mdx_esm_parse: None,
-    }
-}
-
-pub fn parse(source: &str, parse_options: &markdown::ParseOptions, wikilinks: bool) -> Node {
-    let mut ast = markdown::to_mdast(&source.to_string(), parse_options).expect("unable to parse markdown");
-    postprocess(source, &mut ast, wikilinks);
-    ast
-}
-
-fn postprocess(source: &str, ast: &mut Node, wikilinks: bool) {
-    match ast {
-        Node::Text(mdast::Text{position, ..}) if wikilinks => {
-            *ast = Node::Paragraph(mdast::Paragraph{
-                position: position.clone(),
-                children: Parser::new_at(source, position.clone().unwrap()).collect()
-            })
-        },
-        Node::InlineMath(m) if is_inline_latex(source, &m) => 
-            *ast = Node::Math(mdast::Math{
-                value: m.value.clone(),
-                position: m.position.clone(),
-                meta: None,
-            }),
-        x => {
-            for c in x.children_mut().into_iter().flatten() {
-                postprocess(source, c, wikilinks)
-            }
-        }
-    }
-}
-
-fn text_content(s: String, p: Position) -> Node {
-    Node::Text(mdast::Text {
-        value: s,
-        position: Some(p),
-    })
-}
-
-type PeekTokenStream<'a> = Peekable<TokenStream<'a>>;
-
-struct Parser<'a> {
-    tokens: PeekTokenStream<'a>
-}
-
-impl<'a> Parser<'a> {
-    fn new_at(source: &'a str, position: Position) -> Self {
-        let text = &source[position.start.offset..position.end.offset];
-        Self {
-            tokens: TokenStream::new_at(&text, position.start).peekable(),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ParseError(String, Option<Point>);
 use Token::*;
 
-fn parse_wikilink_first_field<'a>(tokens: &mut PeekTokenStream<'a>) -> Result<(String, Position), ParseError> {
-    let start : Point = match tokens.peek(){
-        Some((_, x)) => x.start.clone(),
-        None => return Err(ParseError(String::new(), None))
-    };
-    let mut name = String::new();
-    let mut end: Point = start.clone();
-    loop {
-        match tokens.peek() {
-            Some((Pipe, _))| Some((RRBra, _)) => break Ok((name, Position {start, end})),
-            Some((t, _)) => {
-                name.push_str(&t.to_string());
-                end = tokens.next().unwrap().1.end;
-            }
-            None => return Err(ParseError(name, Some(end))),
-        }
-    }
+use core::iter::Peekable;
+
+
+pub fn default_options() -> Options {
+    let mut r = Options::all();
+    r.set(Options::ENABLE_FOOTNOTES, false);
+    r
 }
 
-fn parse_wikilink_alias<'a>(tokens: &mut PeekTokenStream<'a>) -> Result<mdast::Text, ParseError>{
-    let start : Point = match tokens.peek(){
-        Some((_, x)) => x.start.clone(),
-        None => return Err(ParseError(String::new(), None))
-    };
-    let mut name = String::new();
-    let mut end: Point = start.clone();
-    loop {
-        match tokens.peek() {
-            Some((RRBra, _)) => break Ok(mdast::Text {
-                value: name,
-                position: Some(Position{start, end}),
-            }),
-            Some((t, _)) => {
-                name.push_str(&t.to_string());
-                end = tokens.next().unwrap().1.end;
-            }
-            None => return Err(ParseError(name, Some(end))),
-        }
-    }
-}
 
-fn parse_wikilink<'a>(tokens: &mut PeekTokenStream<'a>) -> Result<mdast::Link, ParseError> {
-    let start = tokens.next().unwrap().1.start;
-    let (url, url_pos) = parse_wikilink_first_field(tokens)?;
-    match tokens.next() {
-        Some((RRBra, x)) => Ok(mdast::Link {
-            title: Some("wiki".into()),
-            url: url.clone(),
-            children: vec![text_content(url, url_pos)],
-            position: Some(Position {start, end: x.end.clone()}),
-        }),
-        Some((Pipe, _)) => {
-            let alias = parse_wikilink_alias(tokens)?;
-            let end = tokens.next().unwrap().1.end;
-            Ok(mdast::Link {
-                title: Some("wiki".into()),
-                url: url.clone(),
-                children: vec![Node::Text(alias)],
-                position: Some(Position {start, end}),
-            })
-        }
-        _ => unreachable!()
-    }
-}
+/// regroups adjacents text events.
+/// if the events are [Text("a"), Text("b"), Link], the result will be
+/// [Text("ab"), Link]
+fn group_text<'a>(source: &'a str, events: Vec<(Event<'a>, Range<usize>)>) 
+-> Vec<(Event<'a>, Range<usize>)> {
+    let mut result = Vec::with_capacity(events.len());
 
-fn parse_text<'a>(tokens: &mut Peekable<TokenStream<'a>>) -> mdast::Text {
-    let start = tokens.peek().unwrap().1.start.clone();
-    let mut end = start.clone();
-    let mut name = String::new();
-    loop {
-        match tokens.peek() {
-            Some((LLBra, _)) | None => break mdast::Text {
-                value: name,
-                position: Some(Position{start, end}),
+    let mut last_text_range: Option<Range<usize>> = None;
+
+    for (t, r) in events {
+        last_text_range = match (t, std::mem::take(&mut last_text_range)) {
+            (Event::Text(_), Some(last_range)) => {
+                Some(last_range.start..r.end)
             },
-            Some((t, _)) => {
-                name.push_str(&t.to_string());
-                end = tokens.next().unwrap().1.end;
+            (Event::Text(_), None) => {
+                Some(r)
+            },
+            (t, Some(last_range)) => {
+                result.push((Event::Text(source[last_range.clone()].into()), last_range.clone()));
+                result.push((t, r));
+                None
+            },
+            (t, None) => {
+                result.push((t, r));
+                None
+            }
+        }
+    }
+
+    result
+}
+
+
+/// `parse(s, options, wikilinks)` returns a vector of [`Events`][pulldown_cmark::Event]
+/// it adds inline wikilinks if the `wikilinks` flag is set to `true`
+pub fn parse<'a>(source: &'a str, parse_options: &Options, wikilinks: bool) 
+-> Vec<(Event<'a>, Range<usize>)>{
+    let events = Parser::new_ext(source, parse_options.to_owned())
+        .into_offset_iter()
+        .collect::<Vec<_>>();
+
+    let events_grouped = group_text(source, events);
+
+    if !wikilinks {
+        return events_grouped
+    }
+
+    let mut result = Vec::new();
+
+    for item in events_grouped {
+        match item {
+            (Event::Text(_), r) => result.extend(MyParser::new_at(source, r)),
+            _ => result.push(item)
+        }
+    }
+
+    result
+}
+
+type PeekTokenStream<'a> = Peekable<Lexer<'a>>;
+
+struct MyParser<'a> {
+    source: &'a str,
+    tokens: PeekTokenStream<'a>,
+    buffer: std::array::IntoIter<(Event<'a>, Range<usize>), 3>
+}
+
+
+enum ParseError {
+    Empty,
+    ReParse(Range<usize>)
+}
+
+impl ParseError {
+    /// `error.extend_before(start..end)` returns a new error
+    /// that spans from start to the end of the error 
+    /// (either end, either the original error end)
+    fn extend_before(self, r: Range<usize>) -> ParseError {
+        match self {
+            Self::Empty => Self::ReParse(r),
+            Self::ReParse(r2) => Self::ReParse(r.start..r2.end)
+        }
+    }
+}
+
+
+impl<'a> MyParser<'a> {
+    fn new_at(source: &'a str, position: Range<usize>) -> Self {
+        let text = &source[position.clone()];
+        Self {
+            source,
+            tokens: Lexer::new_at(&text, position.start).peekable(),
+            buffer: std::array::IntoIter::empty(),
+        }
+    }
+
+    /// in `[[url|link]]`, returns `url` and don't consume the `|`
+    fn parse_wikilink_first_field(&mut self) -> Result<Range<usize>, ParseError> {
+        let start : usize = match self.tokens.peek(){
+            Some((_, x)) => x.start,
+            None => return Err(ParseError::Empty)
+        };
+        let mut end: usize = start.clone();
+        loop {
+            match self.tokens.peek() {
+                Some((Pipe, _))| Some((RRBra, _)) => break Ok(start..end),
+                Some((_, _)) => {
+                    end = self.tokens.next().unwrap().1.end;
+                }
+                None => return Err(ParseError::ReParse(start..end)),
+            }
+        }
+    }
+
+    /// in `link]]`, returns `link` and don't consume the `]]`
+    fn parse_wikilink_alias(&mut self) -> Result<Range<usize>, ParseError>{
+        let start : usize = match self.tokens.peek(){
+            Some((_, x)) => x.start.clone(),
+            None => return Err(ParseError::Empty)
+        };
+        let mut end: usize = start.clone();
+        loop {
+            match self.tokens.peek() {
+                Some((RRBra, _)) => return Ok(start..end),
+                Some((_, _)) => {
+                    end = self.tokens.next().unwrap().1.end;
+                }
+                None => return Err(ParseError::ReParse(start..end)),
+            }
+        }
+    }
+
+    /// parse an entire wikilink, ie one of
+    /// - `[[a shortcut url]]`
+    /// - `[[a url|with some displayed content]]`
+    fn parse_wikilink(&mut self) -> Result<[(Event<'a>, Range<usize>); 3], ParseError> {
+        let tag_pos = self.tokens.next().unwrap().1;
+        let url_pos = self.parse_wikilink_first_field()
+            .map_err(|x| x.extend_before(tag_pos.clone()))?;
+
+        let opening_tag = Event::Start(Tag::Link(
+                LinkType::Inline,
+                self.source[url_pos.clone()].into(),
+                "wiki".into(),
+        ));
+
+        let closing_tag = Event::End(TagEnd::Link);
+
+        match self.tokens.next() {
+            Some((RRBra, x)) => {
+                Ok([
+                    (opening_tag, tag_pos.start..x.end),
+                    (Event::Text(self.source[url_pos.clone()].into()), url_pos),
+                    (closing_tag, tag_pos.start..x.end),
+                ])
+            },
+            Some((Pipe, _)) => {
+                let alias_pos = self.parse_wikilink_alias()
+                    .map_err(|x| x.extend_before(tag_pos.clone()))?;
+
+                let end = self.tokens.next().unwrap().1.end;
+                Ok([
+                   (opening_tag, tag_pos.start..end),
+                    (Event::Text(self.source[alias_pos.clone()].into()), alias_pos),
+                   (closing_tag, tag_pos.start..end),
+                ])
+            }
+            _ => unreachable!()
+        }
+    }
+
+    // parse a text until the first `[[` (start of wikilink) is encountered.
+    // don't consume the `[[`
+    fn parse_text(&mut self) -> Range<usize> {
+        let start = self.tokens.peek().unwrap().1.start.clone();
+        let mut end = start.clone();
+        loop {
+            match self.tokens.peek() {
+                Some((LLBra, _)) | None => return start..end,
+                Some((_, _)) => {
+                    end = self.tokens.next().unwrap().1.end;
+                }
             }
         }
     }
 }
 
-impl<'a> Iterator for Parser<'a> {
-    type Item = Node;
+
+impl<'a> Iterator for MyParser<'a> {
+    type Item = (Event<'a>, Range<usize>);
     fn next(&mut self) -> Option<Self::Item> {
+        while let Some((x, r)) = self.buffer.next() {
+            return Some((x.clone(), r.clone()))
+        };
         match self.tokens.peek()? {
             (LLBra, x) => {
-                let start = x.start.clone();
-                match parse_wikilink(&mut self.tokens) {
-                    Ok(l) => Some(Node::Link(l)),
-                    Err(ParseError(s, end)) => 
-                        Some(text_content(s, 
-                                Position {end: end.unwrap_or(start.clone()), start}))
+                let _start = x.start.clone();
+                match self.parse_wikilink() {
+                    Ok(b) => {
+                        self.buffer = b.into_iter();
+                        self.next()
+                    },
+                    Err(e) => {
+                        let r = match e {
+                            ParseError::ReParse(r) => r,
+                            _ => unreachable!(),
+                        };
+                        Some((Event::Text(self.source[r.clone()].into()), r))
+                    }
                 }
             },
-            (NewLine, _) => {
-                self.tokens.next();
-                self.next()
-            }
+            (NewLine, _) => self.next(),
             _ => {
-                Some(Node::Text(
-                        parse_text(&mut self.tokens)
-                ))
+                let r = self.parse_text();
+                Some((Event::Text(self.source[r.clone()].into()), r))
             }
         }
-    }
-}
-
-fn is_inline_latex(source: &str, m: &mdast::InlineMath) -> bool {
-    match &m.position {
-        Some(p) => {
-            source.get(p.start.offset..p.start.offset+2) == Some("$$") 
-            && source.get(p.end.offset-2..p.end.offset) == Some("$$")
-        }
-        None => false
     }
 }
 
@@ -238,55 +240,82 @@ fn is_inline_latex(source: &str, m: &mdast::InlineMath) -> bool {
 mod tests {
     use wasm_test::*;
     use super::*;
+    use pulldown_cmark::TagEnd;
+
+    use Event::*;
+    use LinkType::*;
 
     #[wasm_test]
-    fn test_offset_dollar(){
-        let s = "$$x$$";
-        assert!(s.get(0..2)==Some("$$"));
-        assert!(s.get(s.len()-2..s.len())==Some("$$"));
-    }
-
-    #[wasm_test]
-    fn test_offset2(){
+    fn test_offset(){
         let s = "12345";
-        let _parser = Parser::new_at(s, Position::new(1,1,0, 1,6,5));
+        let _parser = MyParser::new_at(s, 0..5);
     }
 
     #[wasm_test]
-    fn parse_wiki_no_alias() {
+    fn parse_wikilink_no_alias() {
         let s = "here is a wikilink: [[link]]";
-        let nodes: Vec<Node> =
-            Parser::new_at(s, Position::new(1,1,0, 1,29,28))
+        let tokens : Vec<_> = Lexer::new_at(s, 0).collect();
+        println!("{tokens:?}");
+        let events: Vec<_> =
+            MyParser::new_at(s, 0..28)
             .collect();
-        println!("{nodes:?}");
-        assert_eq!(nodes[0], text_content("here is a wikilink: ".into(), Position::new(1,1,0, 1,21,20)));
-        assert_eq!(nodes[1],
-                Node::Link(mdast::Link { 
-                    children: vec![ text_content("link".into(), Position::new(1,23,22,1,27,26))], 
-                    position: Some(Position::new(1,21,20, 1,29,28)), 
-                    url: "link".into(), 
-                    title: Some("wiki".into()) 
-                })
-       );
+        println!("{events:?}");
+        assert_eq!(events, vec![
+           (Text("here is a wikilink: ".into()), 0..20),
+           (Start(Tag::Link(Inline, "link".into(), "wiki".into())), 20..28),
+           (Text("link".into()), 22..26),
+           (End(TagEnd::Link), 20..28)
+        ]);
     }
 
     #[wasm_test]
-    fn parse_wiki_alias() {
-        let s = "[[url|an alias with a | in it]]";
-        let nodes: Vec<Node> =
-            Parser::new_at(s, Position::new(1,1,0, 1,32,31))
+    fn parse_wikilink_alias(){
+        let s = "[[the url| with a strange content |😈| inside]]";
+
+        let events: Vec<_> = 
+            MyParser::new_at(s, 0..s.len())
+            .map(|(t, _)| t)
             .collect();
-        println!("{:?}", nodes[0]);
+
+        println!("{events:?}");
         assert_eq!(
-            nodes[0],
-            Node::Link(mdast::Link { 
-                children: vec![ 
-                    text_content("an alias with a | in it".into(), Position::new(1,7,6, 1,30,29))
-                ], 
-                position: Some(Position::new(1,1,0, 1,32,31)), 
-                url: "url".into(), 
-                title: Some("wiki".into()) 
-            })
-       );
+            events,
+            vec![
+                Start(Tag::Link(Inline, "the url".into(), "wiki".into())), 
+                Text(" with a strange content |😈| inside".into()), 
+                End(TagEnd::Link)]
+        );
+    }
+
+    #[wasm_test]
+    fn parse(){
+        let s = "[[the url| with a strange content |😈| inside]]";
+
+        let events: Vec<_> = 
+            parse(s, &default_options(), true)
+            .into_iter()
+            .map(|(t, _)| t)
+            .collect();
+
+        println!("{events:?}");
+        assert_eq!(
+            events,
+            vec![
+                Start(Tag::Paragraph),
+                Start(Tag::Link(Inline, "the url".into(), "wiki".into())), 
+                Text(" with a strange content |😈| inside".into()), 
+                End(TagEnd::Link),
+                End(TagEnd::Paragraph),
+            ]
+        );
+    }
+
+    #[wasm_test]
+    fn group_by() {
+        let slice = &[1, 2, 3, 1, 1, 1, 2, 1];
+        let groups: Vec<_> = slice.group_by(|a,b| *a==1 && *b == 1)
+            .collect();
+        
+        assert_eq!(groups, vec![vec![1], vec![2], vec![3], vec![1, 1, 1], vec![2], vec![1]])
     }
 }
