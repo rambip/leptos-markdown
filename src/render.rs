@@ -127,16 +127,16 @@ impl<'a> Iterator for Renderer<'a>
             SoftBreak => Ok(self.next()?),
             HardBreak => Ok(view!{cx, <br/>}.into_any()),
             Rule => Ok(render_rule(self.context, range)),
-            TaskListMarker(_) => HtmlError::err("do not support todo lists yet"),
+            TaskListMarker(m) => Ok(render_tasklist_marker(self.context, *m, range)),
             Math(disp, content) => render_maths(self.context, &content, &disp, range),
         };
 
         Some(
             rendered.unwrap_or_else(|e| view!{cx,
-                <div class="error">
-                    <p>"got this error while rendering markdown"</p>
-                    <span>{e.to_string()}</span>
-                </div>
+                <span class="error" style="border: 1px solid red">
+                    {e.to_string()}
+                    <br/>
+                </span>
                 }.into_any()
             )
         )
@@ -272,6 +272,24 @@ impl<'a> Renderer<'a>
 }
 
 
+fn render_tasklist_marker(context: &RenderContext, m: bool, position: Range<usize>) 
+    -> Html {
+    let cx = context.cx;
+    let onclick = context.onclick.clone();
+    let callback = move |e: MouseEvent| {
+        e.prevent_default();
+        e.stop_propagation();
+        let click_event = MarkdownMouseEvent {
+            mouse_event: e,
+            position: position.clone()
+        };
+        onclick(click_event)
+    };
+    view!{
+        cx, <input type="checkbox" checked=m on:click=callback>
+            </input>
+    }.into_any()
+}
 
 fn render_rule(context: &RenderContext, range: Range<usize>) -> Html{
     let cx = context.cx;

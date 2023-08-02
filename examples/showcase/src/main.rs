@@ -42,6 +42,10 @@ Wikilinks are supported to: [[https://en.wikipedia.org/wiki/Markdown|markdown]]
 - and
 - unorderded
 - too
+
+Even todo lists:
+- [ ] todo
+- [x] done
 "#;
 
 #[component]
