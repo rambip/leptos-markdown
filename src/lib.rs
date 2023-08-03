@@ -1,6 +1,3 @@
-#![feature(slice_group_by)]
-#![feature(array_into_iter_constructors)]
-
 use leptos::*;
 use leptos::html::AnyElement;
 
@@ -11,10 +8,10 @@ pub use render::HtmlError;
 
 use web_sys::MouseEvent;
 
-mod parse;
-use parse::{parse, default_options};
+use pulldown_cmark_wikilink::{Parser, Options, LinkType};
 
 mod utils;
+use utils::Callback;
 
 use core::ops::Range;
 
@@ -32,7 +29,7 @@ pub struct LinkDescription {
     pub title: String,
 
     /// the type of link
-    pub link_type: pulldown_cmark::LinkType,
+    pub link_type: LinkType,
 
     /// wether the link is an image
     pub image: bool,
@@ -50,6 +47,7 @@ pub struct MarkdownMouseEvent {
     // pub tag: pulldown_cmark::Tag<'a>,
 }
 
+
 #[component]
 pub fn Markdown(
     cx: Scope,
@@ -61,12 +59,12 @@ pub fn Markdown(
     /// the callback called when a component is clicked.
     /// if you want to controll what happens when a link is clicked,
     /// use [`render_links`][render_links]
-    #[prop(optional)] 
-    on_click: Option<Box<dyn Fn(MarkdownMouseEvent)>>,
+    #[prop(optional, into)] 
+    on_click: Option<Callback<MarkdownMouseEvent, ()>>,
 
     /// 
-    #[prop(optional)] 
-    render_links: Option<Box<dyn Fn(LinkDescription) -> 
+    #[prop(optional, into)] 
+    render_links: Option<Callback<LinkDescription, 
     Result<HtmlElement<AnyElement>, HtmlError>>>,
 
     /// the name of the theme used for syntax highlighting.
@@ -82,8 +80,8 @@ pub fn Markdown(
     /// modify parse options.
     /// It take the default parse options and returns the options you want to enanble.
     /// For wikilinks, see the `wikilinks` prop.
-    #[prop(optional)]
-    parse_options: Option<Box<dyn Fn(pulldown_cmark::Options) -> pulldown_cmark::Options>>,
+    #[prop(optional, into)]
+    parse_options: Option<Callback<Options, Options>>,
 
     ) -> impl IntoView 
      {
@@ -91,21 +89,22 @@ pub fn Markdown(
         cx,
         theme,
         on_click,
-        render_links
+        render_links,
     );
 
     let options = match parse_options {
-        Some(f) => f(default_options()),
-        None => default_options()
+        Some(f) => f.call(Options::all()),
+        None => Options::all(),
     };
 
     view! {cx,
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" crossorigin="anonymous"/>
         <div style="width:100%; padding-left: 10px"> 
             {move || src.with( |x| {
-                    let stream = parse(x, &options, wikilinks);
-                    log!("{stream:?}");
-                    Renderer::new(&context, &stream).collect_view(cx)
+                let stream : Vec<_> = Parser::new_ext(x, options, wikilinks)
+                    .into_offset_iter()
+                    .collect();
+                Renderer::new(&context, &stream).collect_view(cx)
                 })
             }
         </div>

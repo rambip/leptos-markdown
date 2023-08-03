@@ -1,7 +1,6 @@
 use leptos::*;
 use leptos::html::AnyElement;
 
-use std::rc::Rc;
 use core::ops::Range;
 
 use katex;
@@ -10,9 +9,9 @@ use syntect::highlighting::{ThemeSet, Theme};
 
 use web_sys::MouseEvent;
 
-use pulldown_cmark::{Event, Tag, CodeBlockKind, Alignment, MathDisplay, HeadingLevel};
+use pulldown_cmark_wikilink::{Event, Tag, CodeBlockKind, Alignment, MathDisplay, HeadingLevel};
 
-use crate::utils::as_closing_tag;
+use crate::utils::{as_closing_tag, Callback};
 use super::{LinkDescription, MarkdownMouseEvent};
 
 type Html = HtmlElement<AnyElement>;
@@ -27,7 +26,7 @@ pub fn make_callback(context: &RenderContext, position: Range<usize>)
             mouse_event: x,
             position: position.clone()
         };
-        onclick(click_event)
+        onclick.call(click_event)
     }
 }
 
@@ -43,18 +42,18 @@ pub struct RenderContext {
     theme: Theme,
 
     /// callback to add interactivity to the rendered markdown
-    onclick: Rc<dyn Fn(MarkdownMouseEvent)>,
+    onclick: Callback<MarkdownMouseEvent>,
 
     /// callback used to render links
-    render_links: Option<Box<dyn Fn(LinkDescription) -> Result<Html, HtmlError>>>,
+    render_links: Option<Callback<LinkDescription, Result<Html, HtmlError>>>,
 }
 
 
 impl RenderContext
 {
     pub fn new(cx: Scope, theme_name: Option<String>, 
-               onclick: Option<Box<dyn Fn(MarkdownMouseEvent)>>,
-               render_links: Option<Box<dyn Fn(LinkDescription) -> Result<Html,HtmlError>>>)
+               onclick: Option<Callback<MarkdownMouseEvent>>,
+               render_links: Option<Callback<LinkDescription,Result<Html,HtmlError>>>)
 -> Self 
 {
         let theme_set = ThemeSet::load_defaults();
@@ -66,16 +65,11 @@ impl RenderContext
 
         let syntax_set = SyntaxSet::load_defaults_newlines();
 
-        let onclick : Rc<dyn Fn(_)->_> = match onclick {
-            Some(x) => Rc::new(x),
-            None => Rc::new(|_| ())
-        };
-
         RenderContext {
             cx,
             syntax_set,
             theme,
-            onclick,
+            onclick: onclick.unwrap_or(Callback::new(|_| ())),
             render_links,
         }
     }
@@ -283,7 +277,7 @@ fn render_tasklist_marker(context: &RenderContext, m: bool, position: Range<usiz
             mouse_event: e,
             position: position.clone()
         };
-        onclick(click_event)
+        onclick.call(click_event)
     };
     view!{
         cx, <input type="checkbox" checked=m on:click=callback>
@@ -419,7 +413,7 @@ fn render_link(context: &RenderContext, link: LinkDescription)
 {
     let cx = context.cx;
     match (&context.render_links, link.image) {
-        (Some(f), _) => f(link),
+        (Some(f), _) => f.call(link),
         (None, false) => Ok(view!{cx,
                 <a href={link.url}>
                     {link.content}

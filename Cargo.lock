@@ -894,7 +894,7 @@ dependencies = [
  "katex",
  "leptos",
  "log",
- "pulldown-cmark",
+ "pulldown-cmark-wikilink",
  "syntect",
  "wasm-bindgen",
  "wasm-logger",
@@ -1417,6 +1417,14 @@ dependencies = [
  "getopts",
  "memchr",
  "unicase",
+]
+
+[[package]]
+name = "pulldown-cmark-wikilink"
+version = "0.1.0"
+source = "git+https://github.com/rambip/pulldown-cmark-wikilink#61615998db86b4286d72d1a34552789a4a972893"
+dependencies = [
+ "pulldown-cmark",
 ]
 
 [[package]]

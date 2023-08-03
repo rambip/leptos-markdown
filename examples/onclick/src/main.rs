@@ -35,7 +35,7 @@ fn App(cx: Scope) -> impl IntoView {
 
     view!{cx,
         <div>
-            <Markdown src=MARKDOWN_SOURCE on_click=Box::new(onclick)/>
+            <Markdown src=MARKDOWN_SOURCE on_click=onclick/>
                 <br/>
                 <hr/>
                 <p>{"markdown source:"}</p>
