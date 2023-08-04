@@ -1,5 +1,5 @@
 use leptos::*;
-use leptos::html::{AnyElement, ElementDescriptor};
+use leptos::html::AnyElement;
 
 use core::ops::Range;
 
@@ -51,11 +51,10 @@ pub struct RenderContext {
 
 impl RenderContext
 {
-    pub fn new<H>(cx: Scope, theme_name: Option<String>, 
+    pub fn new(cx: Scope, theme_name: Option<String>, 
                onclick: Option<Callback<MarkdownMouseEvent>>,
-               render_links: Option<Callback<LinkDescription,Result<HtmlElement<H>,HtmlError>>>)
+               render_links: Option<Callback<LinkDescription,Result<Html,HtmlError>>>)
 -> Self 
-    where H: ElementDescriptor + 'static
 {
         let theme_set = ThemeSet::load_defaults();
         let theme_name = theme_name
@@ -65,11 +64,6 @@ impl RenderContext
             .clone();
 
         let syntax_set = SyntaxSet::load_defaults_newlines();
-
-        let render_links = match render_links {
-            Some(c) => Some(Callback::new(move |e| Ok(c.call(e)?.into_any()))),
-            None => None
-        };
 
         RenderContext {
             cx,

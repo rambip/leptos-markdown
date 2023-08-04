@@ -1,5 +1,5 @@
 use leptos::*;
-use leptos::html::ElementDescriptor;
+use leptos::html::AnyElement;
 
 mod render;
 use render::{Renderer, RenderContext};
@@ -49,7 +49,7 @@ pub struct MarkdownMouseEvent {
 
 
 #[component]
-pub fn Markdown<H>(
+pub fn Markdown(
     cx: Scope,
 
     /// the markdown text to render
@@ -65,7 +65,7 @@ pub fn Markdown<H>(
     /// 
     #[prop(optional, into)] 
     render_links: Option<Callback<LinkDescription, 
-    Result<HtmlElement<H>, HtmlError>>>,
+    Result<HtmlElement<AnyElement>, HtmlError>>>,
 
     /// the name of the theme used for syntax highlighting.
     /// Only the default themes of [syntect::Theme] are supported
@@ -84,7 +84,6 @@ pub fn Markdown<H>(
     parse_options: Option<Callback<Options, Options>>,
 
     ) -> impl IntoView 
-    where H: ElementDescriptor + 'static
      {
     let context = RenderContext::new(
         cx,
