@@ -1,5 +1,4 @@
 use leptos::*;
-use leptos::html::AnyElement;
 
 mod render;
 use render::{Renderer, RenderContext};
@@ -11,7 +10,7 @@ use web_sys::MouseEvent;
 use pulldown_cmark_wikilink::{Parser, Options, LinkType};
 
 mod utils;
-use utils::Callback;
+use utils::{Callback, HtmlCallback};
 
 use core::ops::Range;
 
@@ -60,12 +59,11 @@ pub fn Markdown(
     /// if you want to controll what happens when a link is clicked,
     /// use [`render_links`][render_links]
     #[prop(optional, into)] 
-    on_click: Option<Callback<MarkdownMouseEvent, ()>>,
+    on_click: Option<Callback<MarkdownMouseEvent>>,
 
     /// 
     #[prop(optional, into)] 
-    render_links: Option<Callback<LinkDescription, 
-    Result<HtmlElement<AnyElement>, HtmlError>>>,
+    render_links: Option<HtmlCallback<LinkDescription>>,
 
     /// the name of the theme used for syntax highlighting.
     /// Only the default themes of [syntect::Theme] are supported
@@ -77,11 +75,10 @@ pub fn Markdown(
     #[prop(default=false)]
     wikilinks: bool,
 
-    /// modify parse options.
-    /// It take the default parse options and returns the options you want to enanble.
-    /// For wikilinks, see the `wikilinks` prop.
+    /// pulldown_cmark options.
+    /// See [`Options`][pulldown_cmark_wikilink::Options] for reference.
     #[prop(optional, into)]
-    parse_options: Option<Callback<Options, Options>>,
+    parse_options: Option<pulldown_cmark_wikilink::Options>,
 
     ) -> impl IntoView 
      {
@@ -92,10 +89,7 @@ pub fn Markdown(
         render_links,
     );
 
-    let options = match parse_options {
-        Some(f) => f.call(Options::all()),
-        None => Options::all(),
-    };
+    let options = parse_options.unwrap_or(Options::all());
 
     view! {cx,
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" crossorigin="anonymous"/>

@@ -1,6 +1,8 @@
 use pulldown_cmark_wikilink::{Tag, TagEnd};
 use std::rc::Rc;
 
+use leptos::html::{HtmlElement, AnyElement, ElementDescriptor};
+
 pub fn as_closing_tag(t: &Tag) -> TagEnd {
     match t {
         Tag::Paragraph => TagEnd::Paragraph,
@@ -26,12 +28,12 @@ pub fn as_closing_tag(t: &Tag) -> TagEnd {
 #[derive(Clone)]
 pub struct Callback<In,Out=()>(Rc<dyn Fn(In) -> Out>);
 
-impl <A,B> Callback<A,B> {
-    pub fn new<F: Fn(A) -> B + 'static>(f: F) -> Self {
+impl <In,Out> Callback<In,Out> {
+    pub fn new<F: Fn(In) -> Out + 'static>(f: F) -> Self {
         Callback(Rc::new(f))
     }
 
-    pub fn call(&self, value: A) -> B {
+    pub fn call(&self, value: In) -> Out {
         self.0(value)
     }
 }
@@ -40,5 +42,21 @@ impl<A,B,F> From<F> for Callback<A,B>
 where F: Fn(A) -> B + 'static {
     fn from(value: F) -> Callback<A,B> {
         Callback(Rc::new(value))
+    }
+}
+
+#[derive(Clone)]
+pub struct HtmlCallback<In>(Rc<dyn Fn(In) -> HtmlElement<AnyElement>>);
+
+impl<In> HtmlCallback<In> {
+    pub fn new<F, H>(f: F) -> Self
+    where H: ElementDescriptor + 'static,
+          F: Fn(In) -> HtmlElement<H> + 'static
+    {
+        HtmlCallback(Rc::new(move |x| f(x).into_any()))
+    }
+
+    pub fn call(&self, value: In) -> HtmlElement<AnyElement> {
+        self.0(value)
     }
 }

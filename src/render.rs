@@ -11,7 +11,7 @@ use web_sys::MouseEvent;
 
 use pulldown_cmark_wikilink::{Event, Tag, CodeBlockKind, Alignment, MathDisplay, HeadingLevel};
 
-use crate::utils::{as_closing_tag, Callback};
+use crate::utils::{as_closing_tag, Callback, HtmlCallback};
 use super::{LinkDescription, MarkdownMouseEvent};
 
 type Html = HtmlElement<AnyElement>;
@@ -45,7 +45,7 @@ pub struct RenderContext {
     onclick: Callback<MarkdownMouseEvent>,
 
     /// callback used to render links
-    render_links: Option<Callback<LinkDescription, Result<Html, HtmlError>>>,
+    render_links: Option<HtmlCallback<LinkDescription>>,
 }
 
 
@@ -53,7 +53,7 @@ impl RenderContext
 {
     pub fn new(cx: Scope, theme_name: Option<String>, 
                onclick: Option<Callback<MarkdownMouseEvent>>,
-               render_links: Option<Callback<LinkDescription,Result<Html,HtmlError>>>)
+               render_links: Option<HtmlCallback<LinkDescription>>)
 -> Self 
 {
         let theme_set = ThemeSet::load_defaults();
@@ -413,7 +413,7 @@ fn render_link(context: &RenderContext, link: LinkDescription)
 {
     let cx = context.cx;
     match (&context.render_links, link.image) {
-        (Some(f), _) => f.call(link),
+        (Some(f), _) => Ok(f.call(link)),
         (None, false) => Ok(view!{cx,
                 <a href={link.url}>
                     {link.content}
