@@ -14,8 +14,8 @@ katex = {version="0.4", default-features=false, features=["wasm-js"]}
 
 wasm-logger = "0.2.0"
 log= "0.4.17"
-wasm-bindgen="=0.2.87"
-web-sys = {version="0.3.64", features=["MouseEvent"]}
+wasm-bindgen="0.2.84"
+web-sys = {version="0.3.61", features=["MouseEvent"]}
 
 
 [dev-dependencies]

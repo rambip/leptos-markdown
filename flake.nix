@@ -1,50 +1,90 @@
 {
-    description = "a random yew project";
+    description = "a leptos markdown component";
 
     inputs = {
-        rust-overlay.url = github:oxalica/rust-overlay;
-        utils.url = github:numtide/flake-utils;
-        wasm-tooling.url = github:rambip/wasm-tooling;
+        flake-utils.url = "github:numtide/flake-utils";
+        rust-overlay = {
+            url = "github:oxalica/rust-overlay";
+            inputs = {
+                flake-utils.follows = "flake-utils";
+            };
+        };
+        crane = {
+          url = "github:ipetkov/crane";
+          inputs.nixpkgs.follows = "nixpkgs";
+        };
     };
 
-    outputs = { self, rust-overlay, nixpkgs, wasm-tooling, utils }: 
-        with utils.lib;
-        eachSystem [system.x86_64-linux system.x86_64-darwin] (system:
-            let overlays = [rust-overlay.overlays.default];
-                pkgs = import nixpkgs {inherit system overlays;};
-                rust-tools = pkgs.callPackage wasm-tooling.lib."${system}".rust {
-                    cargo-toml = ./Cargo.toml;
-                    rust-toolchain = pkgs.rust-bin.nightly.latest.minimal;
-                };
-                build = example_name: rust-tools.buildWithTrunk {
-                     src=./.;
-                     fixRelativeUrl = true;
-                     relativeHtmlTarget = "examples/${example_name}/index.html";
-                };
-                examples = builtins.readDir ./examples;
-                built_examples = builtins.mapAttrs (name: value: build name) examples;
-                generate_copy_command = name : ''cp -r ${build name} $out/${name}'';
-                copy_commands = builtins.map generate_copy_command (
-                   builtins.attrNames (builtins.readDir ./examples)
-                );
+    outputs = { self, rust-overlay, nixpkgs, flake-utils, crane }: 
+        flake-utils.lib.eachDefaultSystem (system:
+        let 
+            pkgs = import nixpkgs {
+                inherit system;
+                overlays = [ (import rust-overlay) ];
+            };
+            inherit (pkgs) lib;
 
+            rustToolchain = pkgs.rust-bin.nightly.latest.default.override {
+                # Set the build targets supported by the toolchain,
+                # wasm32-unknown-unknown is required for trunk.
+                targets = [ "wasm32-unknown-unknown" ];
+            };
+            craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+
+            # discard the directories inside examples to build the library less often
+            libSrc = lib.cleanSourceWith {
+                src = ./.; 
+                filter = path: type:
+                    (builtins.match ".*examples/.*" path == null)
+                    && (craneLib.filterCargoSources path type)
+                    ;
+            };
+
+            fullSrc = lib.cleanSourceWith {
+                src = ./.;
+                filter = path: type:
+                    (lib.hasSuffix "\.html" path) || (lib.hasSuffix "\.css" path)
+                    || (craneLib.filterCargoSources path type)
+                    ;
+            };
+
+            CARGO_BUILD_TARGET = "wasm32-unknown-unknown";
+
+            # Build *just* the cargo dependencies, so we can reuse
+            # all of that work (e.g. via cachix) when running in CI
+            cargoArtifacts = craneLib.buildDepsOnly {
+                inherit CARGO_BUILD_TARGET;
+                src = libSrc;
+                doCheck = false;
+            };
+
+            buildExample = name: craneLib.buildTrunkPackage {
+                inherit CARGO_BUILD_TARGET cargoArtifacts;
+                src = fullSrc;
+                trunkIndexPath = "examples/${name}/index.html";
+                cargoExtraArgs = "--package=./examples/${name}";
+            };
+            example_names = builtins.attrNames(builtins.readDir ./examples);
+            attr_examples = builtins.map 
+                (name: {inherit name; path=buildExample name; value=buildExample name;}) 
+                example_names;
+
+            examples = builtins.listToAttrs attr_examples;
             in
             {
-                packages = built_examples // {
-                    default = 
-                        nixpkgs.legacyPackages."${system}".stdenv.mkDerivation {
-                         name = "markdown examples";
-                         src = "/dev/null";
-                         phases = [ "installPhase" ];
-                         installPhase = ''
-                         mkdir $out
-                         ${builtins.concatStringsSep "\n" copy_commands}
-                         '';
-                     };
+                checks = {};
+                packages = examples // {
+                    default = pkgs.linkFarm "leptos-markdown examples" attr_examples;
                 };
 
-                devShell = pkgs.mkShell {
-                    buildInputs = [pkgs.openssl pkgs.pkg-config] ++ rust-tools.allTools;
+                devShells.default = pkgs.mkShell {
+                    buildInputs = with pkgs; [
+                        rustToolchain
+                        binaryen
+                        openssl 
+                        pkg-config
+                        trunk
+                    ];
                 };
             }
     );
