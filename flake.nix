@@ -61,11 +61,12 @@
             buildExample = name: craneLib.buildTrunkPackage {
                 inherit CARGO_BUILD_TARGET cargoArtifacts;
                 src = fullSrc;
+                pname = "leptos-markdown-${name}";
                 trunkIndexPath = "examples/${name}/index.html";
                 cargoExtraArgs = "--package=./examples/${name}";
                 # RELATIVE URLS are a MESS 
                 # https://github.com/thedodd/trunk/pull/470
-                trunkExtraBuildArgs = "--public-url=/leptos-mardown/${name}";
+                trunkExtraBuildArgs = "--public-url=/leptos-markdown/${name}";
             };
             example_names = builtins.attrNames(builtins.readDir ./examples);
             attr_examples = builtins.map 
