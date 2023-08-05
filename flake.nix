@@ -84,6 +84,7 @@
                         openssl 
                         pkg-config
                         trunk
+                        rust-analyzer
                     ];
                 };
             }
