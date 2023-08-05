@@ -38,10 +38,10 @@ impl <In,Out> Callback<In,Out> {
     }
 }
 
-impl<A,B,F> From<F> for Callback<A,B> 
-where F: Fn(A) -> B + 'static {
-    fn from(value: F) -> Callback<A,B> {
-        Callback(Rc::new(value))
+impl<In,Out,F> From<F> for Callback<In,Out> 
+where F: Fn(In) -> Out + 'static {
+    fn from(value: F) -> Callback<In,Out> {
+        Callback::new(value)
     }
 }
 
@@ -58,5 +58,13 @@ impl<In> HtmlCallback<In> {
 
     pub fn call(&self, value: In) -> HtmlElement<AnyElement> {
         self.0(value)
+    }
+}
+
+impl<In,D,F> From<F> for HtmlCallback<In> 
+where F: Fn(In) -> HtmlElement<D> + 'static,
+      D: ElementDescriptor + 'static {
+    fn from(value: F) -> HtmlCallback<In> {
+        HtmlCallback::new(value)
     }
 }
