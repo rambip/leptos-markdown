@@ -63,6 +63,7 @@
                 src = fullSrc;
                 trunkIndexPath = "examples/${name}/index.html";
                 cargoExtraArgs = "--package=./examples/${name}";
+                trunkExtraBuildArgs = "--public-url=/${name}";
             };
             example_names = builtins.attrNames(builtins.readDir ./examples);
             attr_examples = builtins.map 
