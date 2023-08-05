@@ -63,7 +63,9 @@
                 src = fullSrc;
                 trunkIndexPath = "examples/${name}/index.html";
                 cargoExtraArgs = "--package=./examples/${name}";
-                trunkExtraBuildArgs = "--public-url=/${name}";
+                # RELATIVE URLS are a MESS 
+                # https://github.com/thedodd/trunk/pull/470
+                trunkExtraBuildArgs = "--public-url=/leptos-mardown/${name}";
             };
             example_names = builtins.attrNames(builtins.readDir ./examples);
             attr_examples = builtins.map 
