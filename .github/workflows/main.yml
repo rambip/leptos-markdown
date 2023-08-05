@@ -6,7 +6,7 @@ on:
 permissions:
   contents: write
 jobs:
-  nix-build:
+  build-pages:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -21,8 +21,12 @@ jobs:
 
     - run: nix build
 
-    - name: Deploy 🚀
-      uses: JamesIves/github-pages-deploy-action@v4
-      with:
-        folder: result
+    - run: tar czfh github-pages.tar.gz --directory=result .
 
+  deploy:
+    needs: build-pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
