@@ -21,7 +21,7 @@ jobs:
 
     - run: nix build
 
-    - run: tar czfh github-pages.tar.gz --directory=result .
+    - run: tar czfh site.tar.gz --directory=result .
 
   deploy:
     needs: build-pages
@@ -35,3 +35,6 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v2
+        with:
+          artifact_name: site.tar.gz
+
