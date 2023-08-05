@@ -21,8 +21,6 @@ jobs:
 
     - run: nix build
 
-    # - run: tar czfh site.tar.gz --directory=result .
-
     - uses: actions/upload-pages-artifact@v2
       with:
         path: "result/"
@@ -38,6 +36,7 @@ jobs:
 
     environment:
       name: github-pages
+        # don't forget to go to the settings/environment and to allow main to push !
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
