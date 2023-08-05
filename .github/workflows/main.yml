@@ -26,6 +26,11 @@ jobs:
   deploy:
     needs: build-pages
     runs-on: ubuntu-latest
+    # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
