@@ -25,13 +25,13 @@
             inherit (pkgs) lib;
 
             rustToolchain = pkgs.rust-bin.selectLatestNightlyWith(
-                toolchain: toolchain.default.default.override 
+                toolchain: toolchain.default.override 
                 {
                     # Set the build targets supported by the toolchain,
                     # wasm32-unknown-unknown is required for trunk.
                     targets = [ "wasm32-unknown-unknown" ];
-                };
-            )
+                }
+            );
             craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
             # discard the directories inside examples to build the library less often
