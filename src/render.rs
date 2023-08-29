@@ -9,7 +9,7 @@ use syntect::highlighting::{ThemeSet, Theme};
 
 use web_sys::MouseEvent;
 
-use pulldown_cmark_wikilink::{Event, Tag, CodeBlockKind, Alignment, MathDisplay, HeadingLevel};
+use pulldown_cmark_wikilink::{Event, Tag, CodeBlockKind, Alignment, MathMode, HeadingLevel};
 
 use crate::utils::{as_closing_tag, Callback, HtmlCallback};
 use super::{LinkDescription, MarkdownMouseEvent};
@@ -236,22 +236,22 @@ impl<'a> Renderer<'a>
             Tag::Emphasis => view!{cx, <i>{self.children(tag)}</i>}.into_any(),
             Tag::Strong => view!{cx, <b>{self.children(tag)}</b>}.into_any(),            
             Tag::Strikethrough => view!{cx, <s>{self.children(tag)}</s>}.into_any(),            
-            Tag::Image(t, url, title) => {
+            Tag::Image{link_type, dest_url, title, ..} => {
                 let description = LinkDescription {
-                    url: url.to_string(),
+                    url: dest_url.to_string(),
                     title: title.to_string(),
                     content: self.children(tag),
-                    link_type: *t,
+                    link_type: *link_type,
                     image: true,
                 };
                 render_link(self.context, description)?
             },
-            Tag::Link(t, url, title) => {
+            Tag::Link{link_type, dest_url, title, ..} => {
                 let description = LinkDescription {
-                    url: url.to_string(),
+                    url: dest_url.to_string(),
                     title: title.to_string(),
                     content: self.children(tag),
-                    link_type: *t,
+                    link_type: *link_type,
                     image: false,
                 };
                 render_link(self.context, description)?
@@ -385,16 +385,16 @@ fn render_heading<I: IntoView>(cx: Scope, level: HeadingLevel, content: I) -> Ht
 
 /// `render_maths(content)` returns a html node
 /// with the latex content `content` compiled inside
-fn render_maths(context: &RenderContext, content: &str, display_mode: &MathDisplay, range: Range<usize>) 
+fn render_maths(context: &RenderContext, content: &str, display_mode: &MathMode, range: Range<usize>) 
     -> Result<Html, HtmlError>{
     let opts = katex::Opts::builder()
-        .display_mode(*display_mode == MathDisplay::Block)
+        .display_mode(*display_mode == MathMode::Display)
         .build()
         .unwrap();
 
     let class_name = match display_mode {
-        MathDisplay::Inline => "math-inline",
-        MathDisplay::Block => "math-flow",
+        MathMode::Inline => "math-inline",
+        MathMode::Display => "math-flow",
     };
 
     let callback = make_callback(context, range);
