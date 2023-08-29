@@ -9,7 +9,10 @@ use syntect::highlighting::{ThemeSet, Theme};
 
 use web_sys::MouseEvent;
 
-use pulldown_cmark_wikilink::{Event, Tag, CodeBlockKind, Alignment, MathMode, HeadingLevel};
+use pulldown_cmark_wikilink::{
+    Event, Tag, TagEnd, CodeBlockKind, Alignment, MathMode, HeadingLevel,
+    OffsetIter
+};
 
 use crate::utils::{as_closing_tag, Callback, HtmlCallback};
 use super::{LinkDescription, MarkdownMouseEvent};
@@ -95,14 +98,18 @@ use Event::*;
 
 
 
-pub struct Renderer<'a>{
+pub struct Renderer<'a, 'b, 'c>
+{
     context: &'a RenderContext,
-    stream: core::slice::Iter<'a, (Event<'a>, Range<usize>)>,
-    column_alignment: Option<&'a [Alignment]>,
+    stream: &'c mut pulldown_cmark_wikilink::OffsetIter<'a, 'b>,
+    // TODO: Vec<Alignment> to &[Alignment] to avoid cloning.
+    // But it requires to provide the right lifetime
+    column_alignment: Option<Vec<Alignment>>,
     cell_index: usize,
+    end_tag: Option<TagEnd>
 }
 
-impl<'a> Iterator for Renderer<'a> 
+impl<'a, 'b, 'c> Iterator for Renderer<'a, 'b, 'c> 
 {
     type Item = Html;
 
@@ -113,7 +120,15 @@ impl<'a> Iterator for Renderer<'a>
 
         let rendered = match item {
             Start(t) => self.render_tag(t, range),
-            End(_) => panic!("not supposed to get `End` event here"),
+            End(end) => {
+                // check if the closing tag is the tag that was open
+                // when this renderer was created
+                match self.end_tag {
+                    Some(t) if t == end => return None,
+                    Some(_) => panic!("wrong closing tag"),
+                    None => panic!("didn't expect a closing tag")
+                }
+            },
             Text(s) => Ok(render_text(self.context, &s, range)),
             Code(s) => Ok(render_code(self.context, &s, range)),
             Html(s) => Ok(render_html(self.context, &s, range)),
@@ -121,7 +136,7 @@ impl<'a> Iterator for Renderer<'a>
             SoftBreak => Ok(self.next()?),
             HardBreak => Ok(view!{cx, <br/>}.into_any()),
             Rule => Ok(render_rule(self.context, range)),
-            TaskListMarker(m) => Ok(render_tasklist_marker(self.context, *m, range)),
+            TaskListMarker(m) => Ok(render_tasklist_marker(self.context, m, range)),
             Math(disp, content) => render_maths(self.context, &content, &disp, range),
         };
 
@@ -138,66 +153,51 @@ impl<'a> Iterator for Renderer<'a>
 }
 
 
-impl<'a> Renderer<'a> 
+impl<'a, 'b, 'c> Renderer<'a, 'b, 'c> 
 {
-    pub fn new(context: &'a RenderContext, events: &'a [(Event<'a>, Range<usize>)])-> Self 
+    pub fn new(context: &'a RenderContext, events: &'c mut OffsetIter<'a, 'b>)-> Self 
     {
         Self {
             context,
-            stream: events.iter(),
+            stream: events,
             column_alignment: None,
             cell_index: 0,
+            end_tag: None,
         }
     }
 
-    fn extract_until_tag(&mut self, tag: &'a Tag<'a>) -> &'a [(Event<'a>, Range<usize>)] {
-        let all_events = self.stream.as_slice();
-
-        let closing_tag = as_closing_tag(tag);
-        let closing_index = 
-            all_events
-            .iter()
-            .position(|(x, _)| *x == Event::End(closing_tag))
-            .expect("unable to find corresponding closing tag");
-
-        let (children_events, rest) = &all_events.split_at(closing_index);
-
-        self.stream = rest.iter();
-        self.stream.next().expect("this item should be the closing tag");
-
-        children_events
-    }
-
-    fn children(&mut self, tag: &'a Tag<'a>) -> View {
-        let children_events = self.extract_until_tag(tag);
-
+    fn children(&mut self, tag: Tag<'a>) -> View {
         let sub_renderer = Renderer {
             context: self.context,
-            stream: children_events.into_iter(),
-            column_alignment: self.column_alignment,
+            stream: self.stream,
+            column_alignment: self.column_alignment.clone(),
             cell_index: 0,
+            end_tag: Some(as_closing_tag(&tag))
         };
         sub_renderer.collect_view(self.context.cx)
     }
 
-    fn children_text(&mut self, tag: &'a Tag<'a>) -> Option<String> {
-        let children_events = self.extract_until_tag(tag);
-
-        match children_events {
-            [(Event::Text(s), _)] => Some(s.to_string()),
-            [] => None,
+    fn children_text(&mut self, tag: Tag<'a>) -> Option<String> {
+        let text = match self.stream.next() {
+            Some((Event::Text(s), _)) => Some(s.to_string()),
+            None => None,
             _ => panic!("expected string event, got something else")
-        }
+        };
+
+        let end_tag = &self.stream.next().expect("this event should be the closing tag").0;
+        assert!(end_tag == &Event::End(as_closing_tag(&tag)));
+
+        text
     }
 
-    fn render_tag(&mut self, tag: &'a Tag<'a>, range: Range<usize>) 
+    fn render_tag(&mut self, tag: Tag<'a>, range: Range<usize>) 
     -> Result<Html, HtmlError> 
     {
         let cx = self.context.cx;
 
-        Ok(match tag {
+        Ok(match tag.clone() {
             Tag::Paragraph => view!{cx, <p>{self.children(tag)}</p>}.into_any(),
-            Tag::Heading{level, ..} => render_heading(cx, *level, self.children(tag))
+            Tag::Heading{level, ..} => render_heading(cx, level, self.children(tag))
             ,
             Tag::BlockQuote => view!{cx,
                 <blockquote>
@@ -207,7 +207,7 @@ impl<'a> Renderer<'a>
             Tag::CodeBlock(k) => 
                 render_code_block(self.context, self.children_text(tag), &k,range),
             Tag::List(Some(n0)) => view!{cx, 
-                <ol start=*n0 as i32>
+                <ol start=n0 as i32>
                     {self.children(tag)}
                 </ol>}
             .into_any(),
@@ -229,7 +229,7 @@ impl<'a> Renderer<'a>
                 }.into_any()
             }
             Tag::TableCell => {
-                let align = self.column_alignment.unwrap()[self.cell_index];
+                let align = self.column_alignment.clone().unwrap()[self.cell_index];
                 self.cell_index += 1;
                 render_cell(self.context, self.children(tag), &align)
             }
@@ -241,7 +241,7 @@ impl<'a> Renderer<'a>
                     url: dest_url.to_string(),
                     title: title.to_string(),
                     content: self.children(tag),
-                    link_type: *link_type,
+                    link_type,
                     image: true,
                 };
                 render_link(self.context, description)?
@@ -251,7 +251,7 @@ impl<'a> Renderer<'a>
                     url: dest_url.to_string(),
                     title: title.to_string(),
                     content: self.children(tag),
-                    link_type: *link_type,
+                    link_type,
                     image: false,
                 };
                 render_link(self.context, description)?

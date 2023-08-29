@@ -95,10 +95,9 @@ pub fn Markdown(
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" crossorigin="anonymous"/>
         <div style="width:100%; padding-left: 10px"> 
             {move || src.with( |x| {
-                let stream : Vec<_> = Parser::new_ext(x, options, wikilinks)
-                    .into_offset_iter()
-                    .collect();
-                Renderer::new(&context, &stream).collect_view(cx)
+                let mut stream = Parser::new_ext(x, options, wikilinks)
+                    .into_offset_iter();
+                Renderer::new(&context, &mut stream).collect_view(cx)
                 })
             }
         </div>
