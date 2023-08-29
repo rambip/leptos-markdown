@@ -7,7 +7,7 @@ pub use render::HtmlError;
 
 use web_sys::MouseEvent;
 
-use pulldown_cmark_wikilink::{Parser, Options, LinkType};
+use pulldown_cmark_wikilink::{Parser, Options, LinkType, Event};
 
 mod utils;
 use utils::{Callback, HtmlCallback};
@@ -75,6 +75,10 @@ pub fn Markdown(
     #[prop(default=false)]
     wikilinks: bool,
 
+    /// wether to convert soft breaks to hard breaks.
+    #[prop(default=false)]
+    hard_line_breaks: bool,
+
     /// pulldown_cmark options.
     /// See [`Options`][pulldown_cmark_wikilink::Options] for reference.
     #[prop(optional, into)]
@@ -95,9 +99,19 @@ pub fn Markdown(
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" crossorigin="anonymous"/>
         <div style="width:100%; padding-left: 10px"> 
             {move || src.with( |x| {
-                let mut stream = Parser::new_ext(x, options, wikilinks)
-                    .into_offset_iter();
-                Renderer::new(&context, &mut stream).collect_view(cx)
+                let mut stream: Vec<_> = Parser::new_ext(x, options, wikilinks)
+                    .into_offset_iter()
+                    .collect();
+
+                if hard_line_breaks {
+                    for (r, _) in &mut stream {
+                        if *r == Event::SoftBreak {
+                            *r = Event::HardBreak
+                        }
+                    }
+                }
+
+                Renderer::new(&context, &mut stream.into_iter()).collect_view(cx)
                 })
             }
         </div>

@@ -9,10 +9,7 @@ use syntect::highlighting::{ThemeSet, Theme};
 
 use web_sys::MouseEvent;
 
-use pulldown_cmark_wikilink::{
-    Event, Tag, TagEnd, CodeBlockKind, Alignment, MathMode, HeadingLevel,
-    OffsetIter
-};
+use pulldown_cmark_wikilink::{Event, Tag, TagEnd, CodeBlockKind, Alignment, MathMode, HeadingLevel};
 
 use crate::utils::{as_closing_tag, Callback, HtmlCallback};
 use super::{LinkDescription, MarkdownMouseEvent};
@@ -98,10 +95,11 @@ use Event::*;
 
 
 
-pub struct Renderer<'a, 'b, 'c>
+pub struct Renderer<'a, 'c, I>
+where I: Iterator<Item=(Event<'a>, Range<usize>)>
 {
     context: &'a RenderContext,
-    stream: &'c mut pulldown_cmark_wikilink::OffsetIter<'a, 'b>,
+    stream: &'c mut I,
     // TODO: Vec<Alignment> to &[Alignment] to avoid cloning.
     // But it requires to provide the right lifetime
     column_alignment: Option<Vec<Alignment>>,
@@ -109,7 +107,8 @@ pub struct Renderer<'a, 'b, 'c>
     end_tag: Option<TagEnd>
 }
 
-impl<'a, 'b, 'c> Iterator for Renderer<'a, 'b, 'c> 
+impl<'a, 'c, I> Iterator for Renderer<'a, 'c, I> 
+where I: Iterator<Item=(Event<'a>, Range<usize>)>
 {
     type Item = Html;
 
@@ -153,9 +152,10 @@ impl<'a, 'b, 'c> Iterator for Renderer<'a, 'b, 'c>
 }
 
 
-impl<'a, 'b, 'c> Renderer<'a, 'b, 'c> 
+impl<'a, 'c, I> Renderer<'a, 'c, I> 
+where I: Iterator<Item=(Event<'a>, Range<usize>)>
 {
-    pub fn new(context: &'a RenderContext, events: &'c mut OffsetIter<'a, 'b>)-> Self 
+    pub fn new(context: &'a RenderContext, events: &'c mut I)-> Self 
     {
         Self {
             context,
