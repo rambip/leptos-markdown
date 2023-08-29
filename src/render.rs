@@ -402,7 +402,7 @@ fn render_maths(context: &RenderContext, content: &str, display_mode: &MathMode,
 
     match katex::render_with_opts(content, opts){
         Ok(x) => Ok(view!{cx,
-            <div inner_html=x class=class_name on:click=callback></div>
+            <span inner_html=x class=class_name on:click=callback></span>
         }.into_any()),
         Err(_) => HtmlError::err("invalid math")
     }
