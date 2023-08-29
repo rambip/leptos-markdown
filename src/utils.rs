@@ -19,8 +19,8 @@ pub fn as_closing_tag(t: &Tag) -> TagEnd {
         Tag::Emphasis => TagEnd::Emphasis ,
         Tag::Strong => TagEnd::Strong ,
         Tag::Strikethrough => TagEnd::Strikethrough ,
-        Tag::Link(_, _, _) => TagEnd::Link,
-        Tag::Image(_, _, _) => TagEnd::Image,
+        Tag::Link{..} => TagEnd::Link,
+        Tag::Image{..} => TagEnd::Image,
         Tag::MetadataBlock(k) => TagEnd::MetadataBlock(*k),
     }
 }
