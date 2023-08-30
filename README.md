@@ -1,7 +1,17 @@
-A port of [yew-markdown](https://github.com/rambip/yew-markdown/) using leptos !
+A zero-config but extendable markdown component for [leptos](https://www.leptos.dev/).
+It supports [commonmark](https://commonmark.org/), and so much more.
+
+# Installation
+`leptos-markdown` is not published on crates.io yet.
+Use it as a git dependency !
+```toml
+# inside Cargo.toml
+leptos-markdown = {git="https://github.com/rambip/leptos-markdown"}
+```
 
 # Usage
 You can use this component to render both static and dynamic markdown.
+
 ## Static markdown
 
 ```rust
@@ -26,6 +36,7 @@ use leptos::*;
     }
 }
 ```
+
 
 # Examples
 To build them, just follow the [leptos installation instructions](https://leptos-rs.github.io/leptos/02_getting_started.html) and run `trunk serve` to try them.
@@ -53,6 +64,7 @@ Try it [here](https://rambip.github.io/leptos-markdown/onclick)
 
 
 # Comparison
+I already built a similar library using yew [here](https://github.com/rambip/yew-markdown/)
 This project was great to compare the advantages and drawbacks of the two major rust web frameworks !
 
 see [my feedback](./feedback/README.md) for a comparison
