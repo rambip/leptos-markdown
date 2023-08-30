@@ -72,12 +72,12 @@ pub fn Markdown(
 
     /// wether to enable wikilinks support.
     /// Wikilinks look like [[shortcut link]] or [[url|name]]
-    #[prop(default=false)]
-    wikilinks: bool,
+    #[prop(into, default=false.into())]
+    wikilinks: MaybeSignal<bool>,
 
     /// wether to convert soft breaks to hard breaks.
-    #[prop(default=false)]
-    hard_line_breaks: bool,
+    #[prop(into, default=false.into())]
+    hard_line_breaks: MaybeSignal<bool>,
 
     /// pulldown_cmark options.
     /// See [`Options`][pulldown_cmark_wikilink::Options] for reference.
@@ -99,11 +99,11 @@ pub fn Markdown(
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" crossorigin="anonymous"/>
         <div style="width:100%; padding-left: 10px"> 
             {move || src.with( |x| {
-                let mut stream: Vec<_> = Parser::new_ext(x, options, wikilinks)
+                let mut stream: Vec<_> = Parser::new_ext(x, options, wikilinks())
                     .into_offset_iter()
                     .collect();
 
-                if hard_line_breaks {
+                if hard_line_breaks() {
                     for (r, _) in &mut stream {
                         if *r == Event::SoftBreak {
                             *r = Event::HardBreak
