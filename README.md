@@ -1,4 +1,5 @@
 A zero-config but extendable markdown component for [leptos](https://www.leptos.dev/).
+
 It supports [commonmark](https://commonmark.org/), and so much more.
 
 # Installation
