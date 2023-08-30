@@ -1502,7 +1502,7 @@ dependencies = [
 [[package]]
 name = "pulldown-cmark-wikilink"
 version = "0.1.2"
-source = "git+https://github.com/rambip/pulldown-cmark-wikilink#964b3df01dd6da1f20c17ae2921c76e2af7356b5"
+source = "git+https://github.com/rambip/pulldown-cmark-wikilink#dec9674338f1b5f8ef078a11f3280215c61c6f8c"
 dependencies = [
  "pulldown-cmark",
 ]
