@@ -7,7 +7,7 @@ pub use render::HtmlError;
 
 use web_sys::MouseEvent;
 
-use pulldown_cmark_wikilink::{Parser, Options, LinkType, Event};
+use pulldown_cmark_wikilink::{ParserOffsetIter, Options, LinkType, Event};
 
 mod utils;
 use utils::{Callback, HtmlCallback};
@@ -109,8 +109,7 @@ pub fn Markdown(
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" crossorigin="anonymous"/>
         <div style="width:100%; padding-left: 10px"> 
             {move || src.with( |x| {
-                let mut stream: Vec<_> = Parser::new_ext(x, options, wikilinks())
-                    .into_offset_iter()
+                let mut stream: Vec<_> = ParserOffsetIter::new_ext(x, options, wikilinks())
                     .collect();
 
                 if hard_line_breaks() {
