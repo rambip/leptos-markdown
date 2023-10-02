@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-leptos = {version="0.4.6", features=["csr", "nightly"]}
+leptos = {version="0.5", features=["csr", "nightly"]}
 
 pulldown-cmark-wikilink = { version="0.1.1", git="https://github.com/rambip/pulldown-cmark-wikilink" }
 syntect = { version = "5.0.0", default-features = false, features = ["default-fancy"]}
@@ -14,7 +14,7 @@ katex = {version="0.4", default-features=false, features=["wasm-js"]}
 
 wasm-logger = "0.2.0"
 log= "0.4.17"
-wasm-bindgen="=0.2.84"
+wasm-bindgen="=0.2.87"
 web-sys = {version="0.3.61", features=["MouseEvent"]}
 
 [features]

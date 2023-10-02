@@ -2,31 +2,31 @@ use leptos::*;
 use leptos_markdown::{Markdown, debug::EventInfo};
 
 #[component]
-fn RenderZone(cx: Scope, 
+fn RenderZone(
               content: ReadSignal<String>,
               wikilinks_enabled: ReadSignal<bool>, 
               hard_breaks_enabled: ReadSignal<bool>,
               debug_mode: ReadSignal<bool>) -> impl IntoView {
 
 
-    let (debug_info, set_debug_info) = create_signal(cx, Vec::new());
-    provide_context(cx, EventInfo(set_debug_info));
+    let (debug_info, set_debug_info) = create_signal(Vec::new());
+    provide_context(EventInfo(set_debug_info));
 
     let debug_info_view = move || {
         debug_info()
             .iter()
-            .map(|x| view!{cx, <li>{x}</li>})
-            .collect_view(cx)
+            .map(|x| view!{<li>{x}</li>})
+            .collect_view()
     };
 
-    view!{cx,
+    view!{
         {move || if debug_mode() {
-                view!{cx,
+                view!{
                     <ul>{debug_info_view}</ul>
-                }.into_view(cx)
+                }.into_view()
             }
             else {
-                view!{cx, 
+                view!{
                     <Markdown src=content 
                           wikilinks=wikilinks_enabled
                           hard_line_breaks=hard_breaks_enabled
@@ -38,13 +38,13 @@ fn RenderZone(cx: Scope,
 
 
 #[component]
-fn App(cx: Scope) -> impl IntoView {
-    let (content, set_content) = create_signal(cx, "**bold**".into());
-    let (wikilinks_enabled, set_wikilinks) = create_signal(cx, false);
-    let (hard_breaks_enabled, set_hard_breaks) = create_signal(cx, false);
-    let (debug_mode, set_debug_mode) = create_signal(cx, false);
+fn App() -> impl IntoView {
+    let (content, set_content) = create_signal("**bold**".into());
+    let (wikilinks_enabled, set_wikilinks) = create_signal(false);
+    let (hard_breaks_enabled, set_hard_breaks) = create_signal(false);
+    let (debug_mode, set_debug_mode) = create_signal(false);
 
-    view!{cx,
+    view!{
         <h1>Markdown editor</h1>
         <div style={"display: flex; align-items: top;"}>
             <div style="width:40%">
@@ -90,5 +90,5 @@ fn App(cx: Scope) -> impl IntoView {
 
 fn main() {
     console_error_panic_hook::set_once();
-    mount_to_body(|cx| view!{cx, <App/>})
+    mount_to_body(App)
 }

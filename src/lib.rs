@@ -1,4 +1,5 @@
 use leptos::*;
+use leptos::html::AnyElement;
 
 mod render;
 use render::{Renderer, RenderContext};
@@ -12,7 +13,10 @@ use pulldown_cmark_wikilink::{ParserOffsetIter, Options, LinkType, Event};
 mod utils;
 use utils::{Callback, HtmlCallback};
 
+mod component;
+
 use core::ops::Range;
+use std::collections::HashMap;
 
 /// the description of a link, used to render it with a custom callback.
 /// See [pulldown_cmark::Tag::Link] for documentation
@@ -53,11 +57,29 @@ pub mod debug {
     pub struct EventInfo(pub WriteSignal<Vec<String>>);
 }
 
+pub struct MdComponentProps {
+    pub attributes: Vec<(String, String)>,
+    pub children: View
+}
+
+#[derive(Default)]
+pub struct ComponentMap (HashMap<&'static str, Callback<MdComponentProps, View>>);
+
+impl ComponentMap {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn add<F, I>(mut self, name: &'static str, f: F) -> Self 
+    where F: Fn(MdComponentProps) -> I + 'static,
+          I: IntoView {
+        self.0.insert(name, Callback::new(move |props| f(props).into_view()));
+        self
+    }
+}
+
 
 #[component]
 pub fn Markdown(
-    cx: Scope,
-
     /// the markdown text to render
     #[prop(into)]
     src: MaybeSignal<String>,
@@ -91,21 +113,25 @@ pub fn Markdown(
     #[prop(optional, into)]
     parse_options: Option<pulldown_cmark_wikilink::Options>,
 
+    #[prop(optional, into)]
+    // FIXME
+    components: ComponentMap,
+
     ) -> impl IntoView 
      {
     let context = RenderContext::new(
-        cx,
         theme,
         on_click,
         render_links,
+        components
     );
 
     let options = parse_options.unwrap_or(Options::all());
 
     #[cfg(feature="debug")]
-    let set_debug_info = use_context::<debug::EventInfo>(cx);
+    let set_debug_info = use_context::<debug::EventInfo>();
 
-    view! {cx,
+    view! {
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" crossorigin="anonymous"/>
         <div style="width:100%; padding-left: 10px"> 
             {move || src.with( |x| {
@@ -127,7 +153,7 @@ pub fn Markdown(
                                     .collect())
                 );
 
-                Renderer::new(&context, &mut stream.into_iter()).collect_view(cx)
+                Renderer::new(&context, &mut stream.into_iter()).collect_view()
                 })
             }
         </div>

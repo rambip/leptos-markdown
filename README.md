@@ -63,6 +63,10 @@ Illustrates a cool feature of this crate: `onclick` events for any rendered cont
 
 Try it [here](https://rambip.github.io/leptos-markdown/onclick)
 
+## Custom components
+
+This feature is still very experimental.
+But there is an exemple [here](https://rambip.github.io/leptos-markdown/custom-component)
 
 # Comparison
 I already built a similar library using yew [here](https://github.com/rambip/yew-markdown/)

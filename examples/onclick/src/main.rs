@@ -24,8 +24,8 @@ $$\sum_{n=-\infty}^{+\infty}c_n e^{inx}$$
 
 
 #[component]
-fn App(cx: Scope) -> impl IntoView {
-    let (position, set_position) = create_signal(cx, 0..0);
+fn App() -> impl IntoView {
+    let (position, set_position) = create_signal(0..0);
 
     let onclick = move |e: MarkdownMouseEvent| set_position(e.position);
 
@@ -33,7 +33,7 @@ fn App(cx: Scope) -> impl IntoView {
     let middle = move || &MARKDOWN_SOURCE[position()];
     let after =  move || &MARKDOWN_SOURCE[position().end..];
 
-    view!{cx,
+    view!{
         <div>
             <Markdown src=MARKDOWN_SOURCE on_click=onclick/>
                 <br/>
@@ -50,5 +50,5 @@ fn App(cx: Scope) -> impl IntoView {
 
 fn main() {
     console_error_panic_hook::set_once();
-    mount_to_body(|cx| view!{cx, <App/>})
+    mount_to_body(App)
 }

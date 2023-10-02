@@ -1,6 +1,4 @@
 use leptos::*;
-use leptos::html::AnyElement;
-
 use core::ops::Range;
 
 use katex;
@@ -12,9 +10,9 @@ use web_sys::MouseEvent;
 use pulldown_cmark_wikilink::{Event, Tag, TagEnd, CodeBlockKind, Alignment, MathMode, HeadingLevel};
 
 use crate::utils::{as_closing_tag, Callback, HtmlCallback};
-use super::{LinkDescription, MarkdownMouseEvent};
+use super::{LinkDescription, MarkdownMouseEvent, ComponentMap, MdComponentProps};
 
-type Html = HtmlElement<AnyElement>;
+use super::component::ComponentCall;
 
 
 pub fn make_callback(context: &RenderContext, position: Range<usize>) 
@@ -31,10 +29,10 @@ pub fn make_callback(context: &RenderContext, position: Range<usize>)
 }
 
 
+
+
 /// all the context needed to render markdown:
 pub struct RenderContext {
-    cx: Scope,
-
     /// syntax used for syntax highlighting
     syntax_set: SyntaxSet,
 
@@ -46,14 +44,18 @@ pub struct RenderContext {
 
     /// callback used to render links
     render_links: Option<HtmlCallback<LinkDescription>>,
+
+    /// components
+    components: ComponentMap
 }
 
 
 impl RenderContext
 {
-    pub fn new(cx: Scope, theme_name: Option<String>, 
+    pub fn new(theme_name: Option<String>, 
                onclick: Option<Callback<MarkdownMouseEvent>>,
-               render_links: Option<HtmlCallback<LinkDescription>>)
+               render_links: Option<HtmlCallback<LinkDescription>>,
+               components: ComponentMap)
 -> Self 
 {
         let theme_set = ThemeSet::load_defaults();
@@ -66,11 +68,11 @@ impl RenderContext
         let syntax_set = SyntaxSet::load_defaults_newlines();
 
         RenderContext {
-            cx,
             syntax_set,
             theme,
             onclick: onclick.unwrap_or(Callback::new(|_| ())),
             render_links,
+            components
         }
     }
 }
@@ -104,16 +106,24 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
     // But it requires to provide the right lifetime
     column_alignment: Option<Vec<Alignment>>,
     cell_index: usize,
-    end_tag: Option<TagEnd>
+    end_tag: Option<TagEnd>,
+    current_component: Option<String>
+}
+
+
+fn is_probably_custom_component(raw_html: &str) -> bool {
+    raw_html.chars()
+        .filter(|x| x==&'<' || x==&'>')
+        .count()
+        == 2
 }
 
 impl<'a, 'c, I> Iterator for Renderer<'a, 'c, I> 
 where I: Iterator<Item=(Event<'a>, Range<usize>)>
 {
-    type Item = Html;
+    type Item = View;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let cx = self.context.cx;
         let (item, range) = self.stream.next()? ;
         let range = range.clone();
 
@@ -130,22 +140,46 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
             },
             Text(s) => Ok(render_text(self.context, &s, range)),
             Code(s) => Ok(render_code(self.context, &s, range)),
-            Html(s) => Ok(render_html(self.context, &s, range)),
+            Html(s) if self.current_component==None => {
+                if is_probably_custom_component(&s) {
+                    self.custom_component(&s)
+                }
+                else
+                {
+                    let callback = make_callback(self.context, range);
+                    Ok(
+                        view!{
+                            <div on:click=callback inner_html={s.to_string()}>
+                            </div>
+                        }.into_view()
+                    )
+                }
+            },
+            Html(s) => {
+                let comp = self.current_component.clone().unwrap();
+                if s.trim() == format!("</{}>", comp) {
+                    logging::log!("exiting at comp={comp}");
+                    return None
+                }
+                else {
+                    HtmlError::err(&format!("the component {comp} is not properly closed"))
+                }
+            },
             FootnoteReference(_) => HtmlError::err("do not support footnote refs yet"),
             SoftBreak => Ok(self.next()?),
-            HardBreak => Ok(view!{cx, <br/>}.into_any()),
+            HardBreak => Ok(view!{<br/>}.into_view()),
             Rule => Ok(render_rule(self.context, range)),
             TaskListMarker(m) => Ok(render_tasklist_marker(self.context, m, range)),
             Math(disp, content) => render_maths(self.context, &content, &disp, range),
         };
 
         Some(
-            rendered.unwrap_or_else(|e| view!{cx,
+            rendered.unwrap_or_else(|e| view!{
                 <span class="error" style="border: 1px solid red">
                     {e.to_string()}
                     <br/>
                 </span>
-                }.into_any()
+                }.into_view()
             )
         )
     }
@@ -163,6 +197,40 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
             column_alignment: None,
             cell_index: 0,
             end_tag: None,
+            current_component: None,
+        }
+    }
+
+    fn custom_component(&mut self, raw_html: &str) -> Result<View, HtmlError> {
+        let description: ComponentCall = raw_html.parse().map_err(|x| HtmlError(x))?;
+        logging::log!("got component call {:?}", description);
+        let name: &str = &description.name;
+        let comp = self.context.components.0.get(name)
+            .ok_or(HtmlError(format!("{} is not a valid component", description.name)))?;
+
+        if description.children {
+            let sub_renderer = Renderer {
+                context: self.context,
+                stream: self.stream,
+                column_alignment: self.column_alignment.clone(),
+                cell_index: 0,
+                end_tag: self.end_tag,
+                current_component: Some(description.name)
+            };
+            let children = sub_renderer.collect_view();
+            Ok(
+                comp.call(MdComponentProps{
+                attributes: description.attributes,
+                children
+            }))
+        }
+        else {
+            Ok(
+                comp.call(MdComponentProps{
+                    attributes: description.attributes, 
+                    children: ().into_view()
+                })
+            )
         }
     }
 
@@ -172,9 +240,10 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
             stream: self.stream,
             column_alignment: self.column_alignment.clone(),
             cell_index: 0,
-            end_tag: Some(as_closing_tag(&tag))
+            end_tag: Some(as_closing_tag(&tag)),
+            current_component: self.current_component.clone()
         };
-        sub_renderer.collect_view(self.context.cx)
+        sub_renderer.collect_view()
     }
 
     fn children_text(&mut self, tag: Tag<'a>) -> Option<String> {
@@ -191,51 +260,49 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
     }
 
     fn render_tag(&mut self, tag: Tag<'a>, range: Range<usize>) 
-    -> Result<Html, HtmlError> 
+    -> Result<View, HtmlError> 
     {
-        let cx = self.context.cx;
-
         Ok(match tag.clone() {
-            Tag::Paragraph => view!{cx, <p>{self.children(tag)}</p>}.into_any(),
-            Tag::Heading{level, ..} => render_heading(cx, level, self.children(tag))
+            Tag::Paragraph => view!{<p>{self.children(tag)}</p>}.into_view(),
+            Tag::Heading{level, ..} => render_heading(level, self.children(tag))
             ,
-            Tag::BlockQuote => view!{cx,
+            Tag::BlockQuote => view!{
                 <blockquote>
                     {self.children(tag)}
                 </blockquote>
-            }.into_any(),
+            }.into_view(),
             Tag::CodeBlock(k) => 
                 render_code_block(self.context, self.children_text(tag), &k,range),
-            Tag::List(Some(n0)) => view!{cx, 
+            Tag::List(Some(n0)) => view!{
                 <ol start=n0 as i32>
                     {self.children(tag)}
                 </ol>}
-            .into_any(),
-            Tag::List(None) => view!{cx, <ul>{self.children(tag)}</ul>}
-                .into_any(),
-            Tag::Item => view!{cx, <li>{self.children(tag)}</li>}.into_any(),
+            .into_view(),
+            Tag::List(None) => view!{<ul>{self.children(tag)}</ul>}
+                .into_view(),
+            Tag::Item => view!{<li>{self.children(tag)}</li>}.into_view(),
             Tag::Table(align) => {
                 self.column_alignment = Some(align);
-                view!{cx, <table>{self.children(tag)}</table>}.into_any()
+                view!{<table>{self.children(tag)}</table>}.into_view()
             }
             Tag::TableHead => {
-                view!{cx,
+                view!{
                     <thead>{self.children(tag)}</thead>
-                }.into_any()
+                }.into_view()
             },
             Tag::TableRow => {
-                view!{cx,
+                view!{
                     <tr>{self.children(tag)}</tr>
-                }.into_any()
+                }.into_view()
             }
             Tag::TableCell => {
                 let align = self.column_alignment.clone().unwrap()[self.cell_index];
                 self.cell_index += 1;
                 render_cell(self.context, self.children(tag), &align)
             }
-            Tag::Emphasis => view!{cx, <i>{self.children(tag)}</i>}.into_any(),
-            Tag::Strong => view!{cx, <b>{self.children(tag)}</b>}.into_any(),            
-            Tag::Strikethrough => view!{cx, <s>{self.children(tag)}</s>}.into_any(),            
+            Tag::Emphasis => view!{<i>{self.children(tag)}</i>}.into_view(),
+            Tag::Strong => view!{<b>{self.children(tag)}</b>}.into_view(),            
+            Tag::Strikethrough => view!{<s>{self.children(tag)}</s>}.into_view(),            
             Tag::Image{link_type, dest_url, title, ..} => {
                 let description = LinkDescription {
                     url: dest_url.to_string(),
@@ -259,7 +326,7 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
             Tag::FootnoteDefinition(_) => return HtmlError::err("footnote: not implemented"),
             Tag::MetadataBlock{..} => {
                 let _ = self.children(tag);
-                view!{cx, <div></div>}.into_any()
+                view!{<div></div>}.into_view()
             }
         })
     }
@@ -267,8 +334,7 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
 
 
 fn render_tasklist_marker(context: &RenderContext, m: bool, position: Range<usize>) 
-    -> Html {
-    let cx = context.cx;
+    -> View {
     let onclick = context.onclick.clone();
     let callback = move |e: MouseEvent| {
         e.prevent_default();
@@ -280,43 +346,30 @@ fn render_tasklist_marker(context: &RenderContext, m: bool, position: Range<usiz
         onclick.call(click_event)
     };
     view!{
-        cx, <input type="checkbox" checked=m on:click=callback>
-            </input>
-    }.into_any()
+        <input type="checkbox" checked=m on:click=callback>
+        </input>
+    }.into_view()
 }
 
-fn render_rule(context: &RenderContext, range: Range<usize>) -> Html{
-    let cx = context.cx;
+fn render_rule(context: &RenderContext, range: Range<usize>) -> View{
     let callback = make_callback(context, range);
-    view!{cx, <hr on:click=callback/>}
-    .into_any()
+    view!{<hr on:click=callback/>}.into_view()
 }
 
 
-fn render_html(context: &RenderContext, s: &str, range: Range<usize>) -> Html{
-    let cx = context.cx;
+fn render_code(context: &RenderContext, s: &str, range: Range<usize>) -> View {
     let callback = make_callback(context, range);
-    view!{cx, 
-        <div on:click=callback inner_html={s.to_string()}>
-        </div>
-    }.into_any()
+    view!{<code on:click=callback>{s.to_string()}</code>}
+          .into_view()
 }
 
-fn render_code(context: &RenderContext, s: &str, range: Range<usize>) -> Html{
-    let cx = context.cx;
+fn render_text(context: &RenderContext, s: &str, range: Range<usize>) -> View{
     let callback = make_callback(context, range);
-    view!{cx, <code on:click=callback>{s.to_string()}</code>}
-          .into_any()
-}
-
-fn render_text(context: &RenderContext, s: &str, range: Range<usize>) -> Html{
-    let cx = context.cx;
-    let callback = make_callback(context, range);
-    view!{cx, 
+    view!{
         <span on:click=callback>
             {s.to_string()}
         </span>
-    }.into_any()
+    }.into_view()
 }
 
 
@@ -324,28 +377,27 @@ fn render_code_block(context: &RenderContext,
                      string_content: Option<String>,
                      k: &CodeBlockKind,
                      range: Range<usize>
-    ) -> Html {
-    let cx = context.cx;
+    ) -> View {
     let content = match string_content {
         Some(x) => x,
-        None => return view!{cx,
+        None => return view!{
             <code></code>
         }
-        .into_any(),
+        .into_view(),
     };
 
     let callback = make_callback(context, range);
 
     match highlight_code(context, &content, &k) {
-        None => view!{cx,
+        None => view!{
         <code on:click=callback>
             <pre inner_html=content.to_string()></pre>
         </code>
-        }.into_any(),
-        Some(x) => view!{cx, 
+        }.into_view(),
+        Some(x) => view!{
             <div on:click=callback inner_html=x>
                 </div>
-        }.into_any()
+        }.into_view()
     }
 }
 
@@ -370,15 +422,15 @@ fn highlight_code(context: &RenderContext, content: &str, kind: &CodeBlockKind) 
 
 /// `render_header(d, s)` returns the html corresponding to
 /// the string `s` inside a html header with depth `d`
-fn render_heading<I: IntoView>(cx: Scope, level: HeadingLevel, content: I) -> Html {
+fn render_heading<I: IntoView>(level: HeadingLevel, content: I) -> View {
     use HeadingLevel::*;
     match level {
-        H1 => view!{cx, <h1>{content}</h1>}.into_any(),
-        H2 => view!{cx, <h2>{content}</h2>}.into_any(),
-        H3 => view!{cx, <h3>{content}</h3>}.into_any(),
-        H4 => view!{cx, <h4>{content}</h4>}.into_any(),
-        H5 => view!{cx, <h5>{content}</h5>}.into_any(),
-        H6 => view!{cx, <h6>{content}</h6>}.into_any(),
+        H1 => view!{<h1>{content}</h1>}.into_view(),
+        H2 => view!{<h2>{content}</h2>}.into_view(),
+        H3 => view!{<h3>{content}</h3>}.into_view(),
+        H4 => view!{<h4>{content}</h4>}.into_view(),
+        H5 => view!{<h5>{content}</h5>}.into_view(),
+        H6 => view!{<h6>{content}</h6>}.into_view(),
     }
 }
 
@@ -386,7 +438,7 @@ fn render_heading<I: IntoView>(cx: Scope, level: HeadingLevel, content: I) -> Ht
 /// `render_maths(content)` returns a html node
 /// with the latex content `content` compiled inside
 fn render_maths(context: &RenderContext, content: &str, display_mode: &MathMode, range: Range<usize>) 
-    -> Result<Html, HtmlError>{
+    -> Result<View, HtmlError>{
     let opts = katex::Opts::builder()
         .display_mode(*display_mode == MathMode::Display)
         .build()
@@ -398,31 +450,29 @@ fn render_maths(context: &RenderContext, content: &str, display_mode: &MathMode,
     };
 
     let callback = make_callback(context, range);
-    let cx = context.cx;
 
     match katex::render_with_opts(content, opts){
-        Ok(x) => Ok(view!{cx,
+        Ok(x) => Ok(view!{
             <span inner_html=x class=class_name on:click=callback></span>
-        }.into_any()),
+        }.into_view()),
         Err(_) => HtmlError::err("invalid math")
     }
 }
 
 fn render_link(context: &RenderContext, link: LinkDescription) 
-    -> Result<Html, HtmlError> 
+    -> Result<View, HtmlError> 
 {
-    let cx = context.cx;
     match (&context.render_links, link.image) {
-        (Some(f), _) => Ok(f.call(link)),
-        (None, false) => Ok(view!{cx,
+        (Some(f), _) => Ok(f.call(link).into_view()),
+        (None, false) => Ok(view!{
                 <a href={link.url}>
                     {link.content}
                 </a>
-            }.into_any()
+            }.into_view()
         ),
-        (None, true) => Ok(view!{cx,
+        (None, true) => Ok(view!{
                 <img src={link.url} alt=link.title/>
-            }.into_any()
+            }.into_view()
         )
     }
 }
@@ -440,12 +490,10 @@ fn align_string(align: &Alignment) -> &'static str {
 
 /// `render_cell(cell, align, context)` renders cell as html,
 /// and use `align` to 
-fn render_cell<'a> (context: &RenderContext, content: View, align: &'a Alignment) -> Html{
-    let cx = context.cx;
-
-    view!{ cx,
+fn render_cell<'a> (_context: &RenderContext, content: View, align: &'a Alignment) -> View{
+    view!{ 
         <td style={align_string(align)}>
             {content}
         </td>
-    }.into_any()
+    }.into_view()
 }

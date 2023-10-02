@@ -1,5 +1,5 @@
 [package]
-name = "markdown-showcase"
+name = "custom_element"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,10 +8,8 @@ edition = "2021"
 [dependencies]
 leptos = {version="0.5", features=["nightly", "csr"]}
 
-leptos-markdown = {path= "../.."}
+leptos-markdown = {path= "../..", features=["debug"]}
 wasm-bindgen = "0.2.84"
 web-sys = {version="0.3.61", features=["HtmlTextAreaElement"]}
 
-wasm-logger = "0.2.0"
-log= "0.4.17"
 console_error_panic_hook = "0.1.7"
