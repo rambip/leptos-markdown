@@ -11,8 +11,6 @@ use web_sys::MouseEvent;
 use pulldown_cmark_wikilink::{ParserOffsetIter, Options, LinkType, Event};
 
 mod utils;
-use utils::{Callback, HtmlCallback};
-
 mod component;
 
 use core::ops::Range;
@@ -92,7 +90,7 @@ pub fn Markdown(
 
     /// 
     #[prop(optional, into)] 
-    render_links: Option<HtmlCallback<LinkDescription>>,
+    render_links: Option<Callback<LinkDescription, HtmlElement<AnyElement>>>,
 
     /// the name of the theme used for syntax highlighting.
     /// Only the default themes of [syntect::Theme] are supported

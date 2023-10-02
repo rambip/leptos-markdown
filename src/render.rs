@@ -1,4 +1,5 @@
 use leptos::*;
+use leptos::html::AnyElement;
 use core::ops::Range;
 
 use katex;
@@ -9,7 +10,7 @@ use web_sys::MouseEvent;
 
 use pulldown_cmark_wikilink::{Event, Tag, TagEnd, CodeBlockKind, Alignment, MathMode, HeadingLevel};
 
-use crate::utils::{as_closing_tag, Callback, HtmlCallback};
+use crate::utils::as_closing_tag;
 use super::{LinkDescription, MarkdownMouseEvent, ComponentMap, MdComponentProps};
 
 use super::component::ComponentCall;
@@ -24,7 +25,7 @@ pub fn make_callback(context: &RenderContext, position: Range<usize>)
             mouse_event: x,
             position: position.clone()
         };
-        onclick.call(click_event)
+        onclick(click_event)
     }
 }
 
@@ -43,7 +44,7 @@ pub struct RenderContext {
     onclick: Callback<MarkdownMouseEvent>,
 
     /// callback used to render links
-    render_links: Option<HtmlCallback<LinkDescription>>,
+    render_links: Option<Callback<LinkDescription, HtmlElement<AnyElement>>>,
 
     /// components
     components: ComponentMap
@@ -54,7 +55,7 @@ impl RenderContext
 {
     pub fn new(theme_name: Option<String>, 
                onclick: Option<Callback<MarkdownMouseEvent>>,
-               render_links: Option<HtmlCallback<LinkDescription>>,
+               render_links: Option<Callback<LinkDescription, HtmlElement<AnyElement>>>,
                components: ComponentMap)
 -> Self 
 {
@@ -219,14 +220,14 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
             };
             let children = sub_renderer.collect_view();
             Ok(
-                comp.call(MdComponentProps{
+                comp(MdComponentProps{
                 attributes: description.attributes,
                 children
             }))
         }
         else {
             Ok(
-                comp.call(MdComponentProps{
+                comp(MdComponentProps{
                     attributes: description.attributes, 
                     children: ().into_view()
                 })
@@ -343,7 +344,7 @@ fn render_tasklist_marker(context: &RenderContext, m: bool, position: Range<usiz
             mouse_event: e,
             position: position.clone()
         };
-        onclick.call(click_event)
+        onclick(click_event)
     };
     view!{
         <input type="checkbox" checked=m on:click=callback>
@@ -463,7 +464,7 @@ fn render_link(context: &RenderContext, link: LinkDescription)
     -> Result<View, HtmlError> 
 {
     match (&context.render_links, link.image) {
-        (Some(f), _) => Ok(f.call(link).into_view()),
+        (Some(f), _) => Ok(f(link).into_view()),
         (None, false) => Ok(view!{
                 <a href={link.url}>
                     {link.content}
