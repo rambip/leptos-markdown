@@ -70,6 +70,14 @@
                 # RELATIVE URLS are a MESS 
                 # https://github.com/thedodd/trunk/pull/470
                 trunkExtraBuildArgs = "--public-url=/leptos-markdown/${name}";
+
+                nativeBuildInputs = [
+                    wasm-bindgen-cli.override {
+                        version = "0.2.87";
+                        hash = "sha256-0rK+Yx4/Jy44Fw5VwJ3tG243ZsyOIBBehYU54XP/JGk=";
+                        cargoHash = "sha256-vcpxcRlW1OKoD64owFF6mkxSqmNrvY+y3Ckn5UwEQ50=";
+                    }
+                ];
             };
             example_names = builtins.attrNames(builtins.readDir ./examples);
             attr_examples = builtins.map 
