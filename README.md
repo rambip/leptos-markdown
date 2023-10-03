@@ -66,7 +66,7 @@ Try it [here](https://rambip.github.io/leptos-markdown/onclick)
 ## Custom components
 
 This feature is still very experimental.
-But there is an exemple [here](https://rambip.github.io/leptos-markdown/custom-component)
+But there is an exemple [here](https://rambip.github.io/leptos-markdown/custom_component)
 
 # Comparison
 I already built a similar library using yew [here](https://github.com/rambip/yew-markdown/)
