@@ -24,8 +24,6 @@ fn parse_attribute_value(stream: &mut Peekable<std::str::Chars>)
     loop {
         match stream.peek() {
             None => return Err("expected attribute value".into()),
-            Some(&' ')|Some(&'>')| Some(&'/') 
-                => return Err("please use \" to wrap your attribute".into()),
             Some(&'"') => break,
             _ => attribute.push(stream.next().unwrap())
         }

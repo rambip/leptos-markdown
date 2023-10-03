@@ -135,37 +135,13 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
                 // when this renderer was created
                 match self.end_tag {
                     Some(t) if t == end => return None,
-                    Some(_) => panic!("wrong closing tag"),
+                    Some(t) => panic!("{t:?} is a wrong closing tag"),
                     None => panic!("didn't expect a closing tag")
                 }
             },
             Text(s) => Ok(render_text(self.context, &s, range)),
             Code(s) => Ok(render_code(self.context, &s, range)),
-            Html(s) if self.current_component==None => {
-                if is_probably_custom_component(&s) {
-                    self.custom_component(&s)
-                }
-                else
-                {
-                    let callback = make_callback(self.context, range);
-                    Ok(
-                        view!{
-                            <div on:click=callback inner_html={s.to_string()}>
-                            </div>
-                        }.into_view()
-                    )
-                }
-            },
-            Html(s) => {
-                let comp = self.current_component.clone().unwrap();
-                if s.trim() == format!("</{}>", comp) {
-                    logging::log!("exiting at comp={comp}");
-                    return None
-                }
-                else {
-                    HtmlError::err(&format!("the component {comp} is not properly closed"))
-                }
-            },
+            Html(s) => self.html(&s, range)?,
             FootnoteReference(_) => HtmlError::err("do not support footnote refs yet"),
             SoftBreak => Ok(self.next()?),
             HardBreak => Ok(view!{<br/>}.into_view()),
@@ -202,6 +178,40 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
         }
     }
 
+    fn html(&mut self, s: &str, range: Range<usize>) 
+        -> Option<Result<View, HtmlError>> {
+            match (&self.current_component, self.end_tag) {
+                (None, None) if is_probably_custom_component(s) => {
+                    Some(self.custom_component(s))
+                },
+                (None, _) => {
+                    let callback = make_callback(self.context, range);
+                    Some(Ok(
+                        view!{
+                            <span on:click=callback inner_html={s.to_string()}>
+                            </span>
+                        }.into_view()
+                    ))
+                },
+                (Some(x), None) if s.trim()==format!("</{x}>") => {
+                    // legit end of custom component
+                    return None
+                },
+                (Some(x), None) if is_probably_custom_component(s) => {
+                    Some(HtmlError::err(&format!("the component `{x}` is not properly closed")))
+                },
+                (Some(x), Some(_)) if s.trim()==format!("</{x}>") => {
+                    Some(HtmlError::err(&format!("please make sure there is a newline before the end of your component")))
+                },
+                _ => {
+                    // tries to render html as raw html anyway
+                    Some(Ok(view!{
+                        <span inner_html={s.to_string()}></span>
+                    }.into_view()))
+                },
+            }
+    }
+
     fn custom_component(&mut self, raw_html: &str) -> Result<View, HtmlError> {
         let description: ComponentCall = raw_html.parse().map_err(|x| HtmlError(x))?;
         logging::log!("got component call {:?}", description);
@@ -218,7 +228,9 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
                 end_tag: self.end_tag,
                 current_component: Some(description.name)
             };
+            logging::log!("start collecting view");
             let children = sub_renderer.collect_view();
+            logging::log!("end collecting view");
             Ok(
                 comp(MdComponentProps{
                 attributes: description.attributes,
