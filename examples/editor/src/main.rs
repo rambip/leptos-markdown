@@ -20,26 +20,24 @@ fn RenderZone(
     };
 
     view!{
-        {move || if debug_mode() {
-                view!{
-                    <ul>{debug_info_view}</ul>
-                }.into_view()
-            }
-            else {
-                view!{
-                    <Markdown src=content 
-                          wikilinks=wikilinks_enabled
-                          hard_line_breaks=hard_breaks_enabled
-                    />
-                }
-            }}
+        <div style="border: 1px solid black; margin: 10px; width: 50%">
+            <Markdown src=content 
+                  wikilinks=wikilinks_enabled
+                  hard_line_breaks=hard_breaks_enabled
+            />
+        </div>
+        {move || debug_mode().then_some(
+            view!{
+                <ul>{debug_info_view()}</ul>
+            })
+        }
     }
 }
 
 
 #[component]
 fn App() -> impl IntoView {
-    let (content, set_content) = create_signal("**bold**".into());
+    let (content, set_content) = create_signal("**bold**".to_string());
     let (wikilinks_enabled, set_wikilinks) = create_signal(false);
     let (hard_breaks_enabled, set_hard_breaks) = create_signal(false);
     let (debug_mode, set_debug_mode) = create_signal(false);
@@ -67,23 +65,17 @@ fn App() -> impl IntoView {
                     />
                 </div>
                 <div>
-                    <input type="radio" name="debug-switch" id="html-on" checked=""
-                           on:input=move |_| set_debug_mode(false)/>
-                    <label for="html-on" style="padding-right:15px">html mode</label>
-                    <input type="radio" name="debug-switch" id="debug-on"
+                    <span>debug mode</span>
+                    <input type="checkbox" name="debug-switch" 
                            on:input=move |_| set_debug_mode(true)
                     />
-                    <label for="debug-on">debug mode</label>
                 </div>
             </div>
-
-            <div style="border: 1px solid black; margin: 10px; width: 50%">
-                <RenderZone content=content
-                            wikilinks_enabled=wikilinks_enabled
-                            hard_breaks_enabled=hard_breaks_enabled
-                            debug_mode=debug_mode
-                />
-            </div>
+            <RenderZone content=content
+                        wikilinks_enabled=wikilinks_enabled
+                        hard_breaks_enabled=hard_breaks_enabled
+                        debug_mode=debug_mode
+            />
         </div>
     }
 }
