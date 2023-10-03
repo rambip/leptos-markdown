@@ -75,7 +75,7 @@
                 nativeBuildInputs = [
                     (pkgs.wasm-bindgen-cli.override {
                         version = "0.2.87";
-                        hash = "sha256-0rK+Yx4/Jy44Fw5VwJ3tG243ZsyOIBBehYU54XP/JGk=";
+                        hash = "sha256-0u9bl+FkXEK2b54n7/l9JOCtKo+pb42GF9E1EnAUQa0=";
                         cargoHash = "sha256-vcpxcRlW1OKoD64owFF6mkxSqmNrvY+y3Ckn5UwEQ50=";
                     })
                 ];
