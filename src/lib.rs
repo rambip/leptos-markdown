@@ -133,10 +133,10 @@ pub fn Markdown(
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" crossorigin="anonymous"/>
         <div style="width:100%; padding-left: 10px"> 
             {move || src.with( |x| {
-                let mut stream: Vec<_> = ParserOffsetIter::new_ext(x, options, wikilinks())
+                let mut stream: Vec<_> = ParserOffsetIter::new_ext(x, options, wikilinks.get())
                     .collect();
 
-                if hard_line_breaks() {
+                if hard_line_breaks.get() {
                     for (r, _) in &mut stream {
                         if *r == Event::SoftBreak {
                             *r = Event::HardBreak

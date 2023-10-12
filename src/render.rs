@@ -19,13 +19,13 @@ use super::component::ComponentCall;
 pub fn make_callback(context: &RenderContext, position: Range<usize>) 
     -> impl Fn(MouseEvent) + 'static 
 {
-    let onclick = context.onclick.clone();
+    let callback = context.onclick.clone();
     move |x| {
         let click_event = MarkdownMouseEvent {
             mouse_event: x,
             position: position.clone()
         };
-        onclick(click_event)
+        Callable::call(&callback, click_event)
     }
 }
 
@@ -232,14 +232,14 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
             let children = sub_renderer.collect_view();
             logging::log!("end collecting view");
             Ok(
-                comp(MdComponentProps{
+                Callable::call(comp, MdComponentProps{
                 attributes: description.attributes,
                 children
             }))
         }
         else {
             Ok(
-                comp(MdComponentProps{
+                Callable::call(comp, MdComponentProps{
                     attributes: description.attributes, 
                     children: ().into_view()
                 })
@@ -348,7 +348,7 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
 
 fn render_tasklist_marker(context: &RenderContext, m: bool, position: Range<usize>) 
     -> View {
-    let onclick = context.onclick.clone();
+    let callback = context.onclick.clone();
     let callback = move |e: MouseEvent| {
         e.prevent_default();
         e.stop_propagation();
@@ -356,7 +356,7 @@ fn render_tasklist_marker(context: &RenderContext, m: bool, position: Range<usiz
             mouse_event: e,
             position: position.clone()
         };
-        onclick(click_event)
+        Callable::call(&callback, click_event)
     };
     view!{
         <input type="checkbox" checked=m on:click=callback>
@@ -476,7 +476,7 @@ fn render_link(context: &RenderContext, link: LinkDescription)
     -> Result<View, HtmlError> 
 {
     match (&context.render_links, link.image) {
-        (Some(f), _) => Ok(f(link).into_view()),
+        (Some(f), _) => Ok(Callable::call(f, link).into_view()),
         (None, false) => Ok(view!{
                 <a href={link.url}>
                     {link.content}
