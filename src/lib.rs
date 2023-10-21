@@ -112,8 +112,10 @@ pub fn Markdown(
     parse_options: Option<pulldown_cmark_wikilink::Options>,
 
     #[prop(optional, into)]
-    // FIXME
     components: ComponentMap,
+
+    #[prop(optional, into)]
+    frontmatter: Option<WriteSignal<String>>
 
     ) -> impl IntoView 
      {
@@ -121,7 +123,8 @@ pub fn Markdown(
         theme,
         on_click,
         render_links,
-        components
+        components,
+        frontmatter
     );
 
     let options = parse_options.unwrap_or(Options::all());
@@ -130,8 +133,10 @@ pub fn Markdown(
     let set_debug_info = use_context::<debug::EventInfo>();
 
     view! {
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" crossorigin="anonymous"/>
-        <div style="width:100%; padding-left: 10px"> 
+        <link rel="stylesheet" 
+            href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" 
+            integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" 
+            crossorigin="anonymous"/>
             {move || src.with( |x| {
                 let mut stream: Vec<_> = ParserOffsetIter::new_ext(x, options, wikilinks.get())
                     .collect();
@@ -154,7 +159,6 @@ pub fn Markdown(
                 Renderer::new(&context, &mut stream.into_iter()).collect_view()
                 })
             }
-        </div>
     }
 }
 

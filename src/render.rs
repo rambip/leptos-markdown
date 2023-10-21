@@ -47,7 +47,10 @@ pub struct RenderContext {
     render_links: Option<Callback<LinkDescription, HtmlElement<AnyElement>>>,
 
     /// components
-    components: ComponentMap
+    components: ComponentMap,
+
+    /// setter for the frontmatter of the markdown file
+    frontmatter: Option<WriteSignal<String>>,
 }
 
 
@@ -56,7 +59,9 @@ impl RenderContext
     pub fn new(theme_name: Option<String>, 
                onclick: Option<Callback<MarkdownMouseEvent>>,
                render_links: Option<Callback<LinkDescription, HtmlElement<AnyElement>>>,
-               components: ComponentMap)
+               components: ComponentMap,
+               frontmatter: Option<WriteSignal<String>>,
+               )
 -> Self 
 {
         let theme_set = ThemeSet::load_defaults();
@@ -73,7 +78,8 @@ impl RenderContext
             theme,
             onclick: onclick.unwrap_or(Callback::new(|_| ())),
             render_links,
-            components
+            components,
+            frontmatter
         }
     }
 }
@@ -214,7 +220,6 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
 
     fn custom_component(&mut self, raw_html: &str) -> Result<View, HtmlError> {
         let description: ComponentCall = raw_html.parse().map_err(|x| HtmlError(x))?;
-        logging::log!("got component call {:?}", description);
         let name: &str = &description.name;
         let comp = self.context.components.0.get(name)
             .ok_or(HtmlError(format!("{} is not a valid component", description.name)))?;
@@ -228,9 +233,7 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
                 end_tag: self.end_tag,
                 current_component: Some(description.name)
             };
-            logging::log!("start collecting view");
             let children = sub_renderer.collect_view();
-            logging::log!("end collecting view");
             Ok(
                 Callable::call(comp, MdComponentProps{
                 attributes: description.attributes,
@@ -338,8 +341,12 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
             },
             Tag::FootnoteDefinition(_) => return HtmlError::err("footnote: not implemented"),
             Tag::MetadataBlock{..} => {
-                let _ = self.children(tag);
-                view!{<div></div>}.into_view()
+                let c = self.children_text(tag);
+                match (self.context.frontmatter, c){
+                    (Some(setter), Some(text)) => setter.set(text),
+                    _ => ()
+                };
+                ().into_view()
             }
         })
     }

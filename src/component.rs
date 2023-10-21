@@ -1,8 +1,6 @@
 use std::str::FromStr;
 use core::iter::Peekable;
 
-use leptos::logging;
-
 #[derive(Debug)]
 pub struct ComponentCall {
     pub name: String,
@@ -87,8 +85,6 @@ impl FromStr for ComponentCall {
             }
         }
 
-        logging::log!("the next item in stream is {:?}", stream.peek());
-
         let mut attributes = Vec::new();
         loop {
             match stream.peek() {
@@ -97,8 +93,6 @@ impl FromStr for ComponentCall {
                 _ => attributes.push(parse_attribute(&mut stream)?)
             }
         }
-
-        logging::log!("attributes are {:?}", attributes);
 
         while stream.peek() == Some(&' ') {
             stream.next();
