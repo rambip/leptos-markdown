@@ -276,12 +276,25 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
         text
     }
 
+    fn children_html(&mut self, tag: Tag<'a>) -> Option<String> {
+        let text = match self.stream.next() {
+            Some((Event::Html(s), _)) => Some(s.to_string()),
+            None => None,
+            _ => panic!("expected html event, got something else")
+        };
+
+        let end_tag = &self.stream.next().expect("this event should be the closing tag").0;
+        assert!(end_tag == &Event::End(as_closing_tag(&tag)));
+
+        text
+    }
+
     fn render_tag(&mut self, tag: Tag<'a>, range: Range<usize>) 
     -> Result<View, HtmlError> 
     {
         Ok(match tag.clone() {
             Tag::HtmlBlock => {
-                let child = self.children_text(Tag::HtmlBlock);
+                let child = self.children_html(Tag::HtmlBlock);
                 child.map(|raw_html| view!{<div inner_html=raw_html></div>})
                     .into_view()
             }
