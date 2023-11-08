@@ -19,5 +19,6 @@ pub fn as_closing_tag(t: &Tag) -> TagEnd {
         Tag::Link{..} => TagEnd::Link,
         Tag::Image{..} => TagEnd::Image,
         Tag::MetadataBlock(k) => TagEnd::MetadataBlock(*k),
+        Tag::HtmlBlock => TagEnd::HtmlBlock,
     }
 }

@@ -147,6 +147,7 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
             },
             Text(s) => Ok(render_text(self.context, &s, range)),
             Code(s) => Ok(render_code(self.context, &s, range)),
+            InlineHtml(s) => self.html(&s, range)?, // FIXME: custom component logic ?
             Html(s) => self.html(&s, range)?,
             FootnoteReference(_) => HtmlError::err("do not support footnote refs yet"),
             SoftBreak => Ok(self.next()?),
@@ -279,6 +280,11 @@ where I: Iterator<Item=(Event<'a>, Range<usize>)>
     -> Result<View, HtmlError> 
     {
         Ok(match tag.clone() {
+            Tag::HtmlBlock => {
+                let child = self.children_text(Tag::HtmlBlock);
+                child.map(|raw_html| view!{<div inner_html=raw_html></div>})
+                    .into_view()
+            }
             Tag::Paragraph => view!{<p>{self.children(tag)}</p>}.into_view(),
             Tag::Heading{level, ..} => render_heading(level, self.children(tag))
             ,
