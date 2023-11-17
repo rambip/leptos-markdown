@@ -1,6 +1,10 @@
 use leptos::*;
 use leptos_markdown::*;
 
+use leptos::html::{HtmlElement, AnyElement};
+
+use std::collections::HashMap;
+
 
 #[component]
 pub fn SimpleCounter(initial_value: i32) -> impl IntoView {
@@ -22,26 +26,28 @@ pub fn SimpleCounter(initial_value: i32) -> impl IntoView {
             <span>"Value: " {value} "!"</span>
             <button on:click=increment>+1</button>
         </div>
-    }
+    }.into_any()
 }
 
-fn counter(props: MdComponentProps) -> impl IntoView {
+fn counter(props: MdComponentProps) -> HtmlElement<AnyElement> {
     let initial: i32 = props.attributes.into_iter()
         .find(|(name, _)| name=="initial")
         .and_then(|(_, value)| value.parse().ok())
         .unwrap_or(0);
 
     view!{
-        <SimpleCounter initial_value=initial/>
-    }
+        <div>
+            <SimpleCounter initial_value=initial/>
+        </div>
+    }.into_any()
 }
 
-fn box_component(props: MdComponentProps) -> impl IntoView {
+fn box_component(props: MdComponentProps) -> HtmlElement<AnyElement> {
     view!{
         <div style="border: 2px solid blue">
             {props.children}
         </div>
-    }
+    }.into_any()
 }
 
 static MARKDOWN: &'static str = r#"
@@ -76,9 +82,9 @@ static MARKDOWN: &'static str = r#"
 #[component]
 fn App(
     ) -> impl IntoView {
-    let components = ComponentMap::new()
-        .add("Counter", counter)
-        .add("box", box_component);
+    let mut components = HashMap::new();
+    components.insert("Counter".to_string(), Callback::new(counter));
+    components.insert("box".to_string(), Callback::new(box_component));
 
     view!{
         <Markdown

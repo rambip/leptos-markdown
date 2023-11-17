@@ -1,52 +1,23 @@
+use rust_web_markdown::{
+    render_markdown, ElementAttributes, HtmlElement, WebFramework,
+    MdComponentProps as WMdComponentProps
+};
+
+pub use rust_web_markdown::{
+    LinkDescription, MarkdownMouseEvent, Options,
+};
+
+
+pub type MdComponentProps = WMdComponentProps<MarkdownContext>;
+
 use leptos::*;
 use leptos::html::AnyElement;
 
-mod render;
-use render::{Renderer, RenderContext};
-
-pub use render::HtmlError;
-
-use web_sys::MouseEvent;
-
-use pulldown_cmark_wikilink::{ParserOffsetIter, Options, LinkType, Event};
-
-mod utils;
-mod component;
-
-use core::ops::Range;
 use std::collections::HashMap;
 
-/// the description of a link, used to render it with a custom callback.
-/// See [pulldown_cmark::Tag::Link] for documentation
-pub struct LinkDescription {
-    /// the url of the link
-    pub url: String,
+#[derive(Clone, Copy)]
+pub struct MarkdownContext {}
 
-    /// the html view of the element under the link
-    pub content: View,
-
-    /// the title of the link. 
-    /// If you don't know what it is, don't worry: it is ofter empty
-    pub title: String,
-
-    /// the type of link
-    pub link_type: LinkType,
-
-    /// wether the link is an image
-    pub image: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct MarkdownMouseEvent {
-    /// the original mouse event triggered when a text element was clicked on
-    pub mouse_event: MouseEvent,
-
-    /// the corresponding range in the markdown source, as a slice of [`u8`][u8]
-    pub position: Range<usize>,
-
-    // TODO: add a clonable tag for the type of the element
-    // pub tag: pulldown_cmark::Tag<'a>,
-}
 
 #[cfg(feature="debug")]
 pub mod debug {
@@ -55,26 +26,161 @@ pub mod debug {
     pub struct EventInfo(pub WriteSignal<Vec<String>>);
 }
 
-pub struct MdComponentProps {
-    pub attributes: Vec<(String, String)>,
-    pub children: View
-}
+impl WebFramework for MarkdownContext {
+    type View = View;
 
-#[derive(Default)]
-pub struct ComponentMap (HashMap<&'static str, Callback<MdComponentProps, View>>);
+    type HtmlCallback<T: 'static> = Callback<T, leptos::HtmlElement<AnyElement>>;
 
-impl ComponentMap {
-    pub fn new() -> Self {
-        Self::default()
+    type Callback<A: 'static, B: 'static> = Callback<A, B>;
+
+    type Setter<T: 'static> = WriteSignal<T>;
+
+    fn set<T: 'static>(&self, setter: &WriteSignal<T>, value: T) {
+        setter.set(value)
     }
-    pub fn add<F, I>(mut self, name: &'static str, f: F) -> Self 
-    where F: Fn(MdComponentProps) -> I + 'static,
-          I: IntoView {
-        self.0.insert(name, Callback::new(move |props| f(props).into_view()));
-        self
+
+    #[cfg(feature="debug")]
+    fn send_debug_info(&self, info: Vec<String>) {
+        let set_event_info = use_context::<debug::EventInfo>();
+
+        if let Some(setter) = set_event_info {
+            setter.0.set(info);
+        }
+    }
+
+    #[cfg(not(feature="debug"))]
+    fn send_debug_info(&self, _info: Vec<String>) {
+    }
+
+    fn el_with_attributes(
+        &self,
+        e: HtmlElement,
+        inside: Self::View,
+        attributes: ElementAttributes<Self>,
+    ) -> Self::View {
+        let mut r: leptos::HtmlElement<AnyElement> = match e {
+            HtmlElement::Div => html::div().into_any(),
+            HtmlElement::Span => html::span().into_any(),
+            HtmlElement::Paragraph => html::p().into_any(),
+            HtmlElement::BlockQuote => html::blockquote().into_any(),
+            HtmlElement::Ul => html::ul().into_any(),
+            HtmlElement::Ol(s) => html::ol().attr("start", s).into_any(),
+            HtmlElement::Li => html::ol().into_any(),
+            HtmlElement::Heading(1) => html::h1().into_any(),
+            HtmlElement::Heading(2) => html::h2().into_any(),
+            HtmlElement::Heading(3) => html::h3().into_any(),
+            HtmlElement::Heading(4) => html::h4().into_any(),
+            HtmlElement::Heading(5) => html::h5().into_any(),
+            HtmlElement::Heading(6) => html::h6().into_any(),
+            HtmlElement::Heading(_) => panic!(),
+            HtmlElement::Table => html::table().into_any(),
+            HtmlElement::Thead => html::th().into_any(),
+            HtmlElement::Trow => html::tr().into_any(),
+            HtmlElement::Tcell => html::td().into_any(),
+            HtmlElement::Italics => html::i().into_any(),
+            HtmlElement::Bold => html::b().into_any(),
+            HtmlElement::StrikeThrough => html::s().into_any(),
+            HtmlElement::Pre => html::pre().into_any(),
+        };
+
+        r = r.child(inside);
+        if let Some(c) = attributes.on_click {
+            r = r.on(ev::click, move |e| Callable::call(&c, e));
+        }
+        r = r.style("md", attributes.style.to_string());
+        r = r.classes(attributes.classes.join(" "));
+        if let Some(i) = attributes.inner_html {
+            r = r.inner_html(i.to_string());
+        }
+        r.into_view()
+    }
+
+    fn el_hr(&self, attributes: ElementAttributes<Self>) -> Self::View {
+        let mut r = html::hr();
+        if let Some(c) = attributes.on_click {
+            r = r.on(ev::click, move |e| Callable::call(&c, e));
+        }
+        r = r.style("md", attributes.style.to_string());
+        r = r.classes(attributes.classes.join(" "));
+        if let Some(i) = attributes.inner_html {
+            r = r.inner_html(i.to_string());
+        }
+        r.into_view()
+    }
+
+    fn el_br(&self) -> Self::View {
+        view! {<br/>}.into_view()
+    }
+
+    fn el_code(&self, inside: Self::View, attributes: ElementAttributes<Self>) -> Self::View {
+        let mut r = html::code().child(inside);
+        if let Some(c) = attributes.on_click {
+            r = r.on(ev::click, move |e| Callable::call(&c, e));
+        }
+        r = r.style("md", attributes.style.to_string());
+        r = r.classes(attributes.classes.join(" "));
+        if let Some(i) = attributes.inner_html {
+            r = r.inner_html(i.to_string());
+        }
+        r.into_view()
+    }
+
+    fn el_fragment(&self, children: Vec<Self::View>) -> Self::View {
+        children.into_iter().collect()
+    }
+
+    fn el_a(&self, children: Self::View, href: &str) -> Self::View {
+        view! {<a href={href.to_string()}>{children}</a>}.into_view()
+    }
+
+    fn el_img(&self, src: &str, alt: &str) -> Self::View {
+        view! {<img src={src.to_string()} alt={alt.to_string()}/>}.into_view()
+    }
+
+    fn el_text(&self, text: &str) -> Self::View {
+        text.to_string().into_view()
+    }
+
+    fn mount_dynamic_link(&self, rel: &str, href: &str, integrity: &str, crossorigin: &str) {
+        let document = document();
+
+        let link = document.create_element("link").unwrap();
+
+        link.set_attribute("rel", rel).unwrap();
+        link.set_attribute("href", href).unwrap();
+        link.set_attribute("integrity", integrity).unwrap();
+        link.set_attribute("crossorigin", crossorigin).unwrap();
+
+        document.append_child(&link).unwrap();
+    }
+
+    fn el_input_checkbox(&self, checked: bool, attributes: ElementAttributes<Self>) -> Self::View {
+        let mut r = html::input().attr("checked", checked);
+        if let Some(c) = attributes.on_click {
+            r = r.on(ev::click, move |e| Callable::call(&c, e));
+        }
+        r = r.style("md", attributes.style.to_string());
+        r = r.classes(attributes.classes.join(" "));
+        if let Some(i) = attributes.inner_html {
+            r = r.inner_html(i.to_string());
+        }
+        r.into_view()
+    }
+
+    fn call_callback<A: 'static, B: 'static>(callback: &Self::Callback<A, B>, input: A) -> B {
+        Callable::call(callback, input)
+    }
+
+    fn call_html_callback<T: 'static>(callback: &Self::HtmlCallback<T>, input: T) -> Self::View {
+        Callable::call(callback, input).into_view()
+    }
+
+    fn make_callback<A: 'static, B: 'static, F: Fn(A) -> B + 'static>(
+        f: F,
+    ) -> Self::Callback<A, B> {
+        Callback::new(f)
     }
 }
-
 
 #[component]
 pub fn Markdown(
@@ -90,7 +196,7 @@ pub fn Markdown(
 
     /// 
     #[prop(optional, into)] 
-    render_links: Option<Callback<LinkDescription, HtmlElement<AnyElement>>>,
+    render_links: Option<Callback<LinkDescription<MarkdownContext>, leptos::HtmlElement<AnyElement>>>,
 
     /// the name of the theme used for syntax highlighting.
     /// Only the default themes of [syntect::Theme] are supported
@@ -109,56 +215,35 @@ pub fn Markdown(
     /// pulldown_cmark options.
     /// See [`Options`][pulldown_cmark_wikilink::Options] for reference.
     #[prop(optional, into)]
-    parse_options: Option<pulldown_cmark_wikilink::Options>,
+    parse_options: Option<Options>,
 
     #[prop(optional, into)]
-    components: ComponentMap,
+    components: HashMap<String, Callback<MdComponentProps, leptos::HtmlElement<AnyElement>>>,
 
     #[prop(optional, into)]
     frontmatter: Option<WriteSignal<String>>
 
     ) -> impl IntoView 
      {
-    let context = RenderContext::new(
-        theme,
-        on_click,
-        render_links,
-        components,
-        frontmatter
-    );
 
-    let options = parse_options.unwrap_or(Options::all());
+    move || src.with(|s| {
+         let props = rust_web_markdown::MarkdownProps {
+             components: &components,
+             frontmatter: frontmatter.as_ref(),
+             hard_line_breaks: hard_line_breaks.get(),
+             wikilinks: wikilinks.get(),
+             on_click: on_click.as_ref(),
+             parse_options: parse_options.as_ref(),
+             render_links: render_links.as_ref(),
+             theme: theme.as_deref(),
+     };
 
-    #[cfg(feature="debug")]
-    let set_debug_info = use_context::<debug::EventInfo>();
 
-    view! {
-        <link rel="stylesheet" 
-            href="https://cdn.jsdelivr.net/npm/katex@0.16.7/dist/katex.min.css" 
-            integrity="sha384-3UiQGuEI4TTMaFmGIZumfRPtfKQ3trwQE2JgosJxCnGmQpL/lJdjpcHkaaFwHlcI" 
-            crossorigin="anonymous"/>
-            {move || src.with( |x| {
-                let mut stream: Vec<_> = ParserOffsetIter::new_ext(x, options, wikilinks.get())
-                    .collect();
+        let cx = MarkdownContext {};
+        render_markdown(cx, s, props)
+    })
+    
 
-                if hard_line_breaks.get() {
-                    for (r, _) in &mut stream {
-                        if *r == Event::SoftBreak {
-                            *r = Event::HardBreak
-                        }
-                    }
-                }
 
-                #[cfg(feature="debug")]
-                set_debug_info.map(|setter| (setter.0)(
-                        stream.iter()
-                                    .map(|(e, r)| format!("{r:?}: {e:?}"))
-                                    .collect())
-                );
-
-                Renderer::new(&context, &mut stream.into_iter()).collect_view()
-                })
-            }
-    }
 }
 
