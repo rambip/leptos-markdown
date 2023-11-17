@@ -8,7 +8,7 @@ pub use rust_web_markdown::{
 };
 
 
-pub type MdComponentProps = WMdComponentProps<MarkdownContext>;
+pub type MdComponentProps = WMdComponentProps<'static, MarkdownContext>;
 
 use leptos::*;
 use leptos::html::AnyElement;
@@ -26,7 +26,7 @@ pub mod debug {
     pub struct EventInfo(pub WriteSignal<Vec<String>>);
 }
 
-impl WebFramework for MarkdownContext {
+impl WebFramework<'static> for MarkdownContext {
     type View = View;
 
     type HtmlCallback<T: 'static> = Callback<T, leptos::HtmlElement<AnyElement>>;
@@ -56,7 +56,7 @@ impl WebFramework for MarkdownContext {
         &self,
         e: HtmlElement,
         inside: Self::View,
-        attributes: ElementAttributes<Self>,
+        attributes: ElementAttributes<'static, Self>,
     ) -> Self::View {
         let mut r: leptos::HtmlElement<AnyElement> = match e {
             HtmlElement::Div => html::div().into_any(),
@@ -98,7 +98,7 @@ impl WebFramework for MarkdownContext {
         r.into_view()
     }
 
-    fn el_hr(&self, attributes: ElementAttributes<Self>) -> Self::View {
+    fn el_hr(&self, attributes: ElementAttributes<'static, Self>) -> Self::View {
         let mut r = html::hr();
 
         if let Some(s) = attributes.style {
@@ -149,7 +149,7 @@ impl WebFramework for MarkdownContext {
             .append_child(&link).unwrap();
     }
 
-    fn el_input_checkbox(&self, checked: bool, attributes: ElementAttributes<Self>) -> Self::View {
+    fn el_input_checkbox(&self, checked: bool, attributes: ElementAttributes<'static, Self>) -> Self::View {
         let mut r = html::input()
             .attr("type", "checkbox")
             .attr("checked", checked)
@@ -196,7 +196,7 @@ pub fn Markdown(
 
     /// 
     #[prop(optional, into)] 
-    render_links: Option<Callback<LinkDescription<MarkdownContext>, leptos::HtmlElement<AnyElement>>>,
+    render_links: Option<Callback<LinkDescription<'static, MarkdownContext>, leptos::HtmlElement<AnyElement>>>,
 
     /// the name of the theme used for syntax highlighting.
     /// Only the default themes of [syntect::Theme] are supported
