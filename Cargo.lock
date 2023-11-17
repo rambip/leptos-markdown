@@ -876,7 +876,7 @@ dependencies = [
 
 [[package]]
 name = "leptos-markdown"
-version = "0.5.3"
+version = "0.6.0"
 dependencies = [
  "leptos",
  "rust-web-markdown",
@@ -1556,7 +1556,7 @@ dependencies = [
 [[package]]
 name = "rust-web-markdown"
 version = "0.1.0"
-source = "git+https://github.com/rambip/rust-web-markdown/#6bdd844414295f69f5ee519b5018bc55bca51a67"
+source = "git+https://github.com/rambip/rust-web-markdown/#2ff86f500d89d287f0789e1a02c38fabfbb08213"
 dependencies = [
  "katex",
  "lazy_static",

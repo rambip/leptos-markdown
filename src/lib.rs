@@ -65,7 +65,7 @@ impl WebFramework for MarkdownContext {
             HtmlElement::BlockQuote => html::blockquote().into_any(),
             HtmlElement::Ul => html::ul().into_any(),
             HtmlElement::Ol(s) => html::ol().attr("start", s).into_any(),
-            HtmlElement::Li => html::ol().into_any(),
+            HtmlElement::Li => html::li().into_any(),
             HtmlElement::Heading(1) => html::h1().into_any(),
             HtmlElement::Heading(2) => html::h2().into_any(),
             HtmlElement::Heading(3) => html::h3().into_any(),
@@ -74,20 +74,23 @@ impl WebFramework for MarkdownContext {
             HtmlElement::Heading(6) => html::h6().into_any(),
             HtmlElement::Heading(_) => panic!(),
             HtmlElement::Table => html::table().into_any(),
-            HtmlElement::Thead => html::th().into_any(),
+            HtmlElement::Thead => html::thead().into_any(),
             HtmlElement::Trow => html::tr().into_any(),
             HtmlElement::Tcell => html::td().into_any(),
             HtmlElement::Italics => html::i().into_any(),
             HtmlElement::Bold => html::b().into_any(),
             HtmlElement::StrikeThrough => html::s().into_any(),
             HtmlElement::Pre => html::pre().into_any(),
+            HtmlElement::Code => html::code().into_any(),
         };
 
         r = r.child(inside);
+        if let Some(s) = attributes.style {
+            r = r.attr("style", s.to_string())
+        }
         if let Some(c) = attributes.on_click {
             r = r.on(ev::click, move |e| Callable::call(&c, e));
         }
-        r = r.style("md", attributes.style.to_string());
         r = r.classes(attributes.classes.join(" "));
         if let Some(i) = attributes.inner_html {
             r = r.inner_html(i.to_string());
@@ -97,10 +100,13 @@ impl WebFramework for MarkdownContext {
 
     fn el_hr(&self, attributes: ElementAttributes<Self>) -> Self::View {
         let mut r = html::hr();
+
+        if let Some(s) = attributes.style {
+            r = r.attr("style", s.to_string())
+        }
         if let Some(c) = attributes.on_click {
             r = r.on(ev::click, move |e| Callable::call(&c, e));
         }
-        r = r.style("md", attributes.style.to_string());
         r = r.classes(attributes.classes.join(" "));
         if let Some(i) = attributes.inner_html {
             r = r.inner_html(i.to_string());
@@ -110,19 +116,6 @@ impl WebFramework for MarkdownContext {
 
     fn el_br(&self) -> Self::View {
         view! {<br/>}.into_view()
-    }
-
-    fn el_code(&self, inside: Self::View, attributes: ElementAttributes<Self>) -> Self::View {
-        let mut r = html::code().child(inside);
-        if let Some(c) = attributes.on_click {
-            r = r.on(ev::click, move |e| Callable::call(&c, e));
-        }
-        r = r.style("md", attributes.style.to_string());
-        r = r.classes(attributes.classes.join(" "));
-        if let Some(i) = attributes.inner_html {
-            r = r.inner_html(i.to_string());
-        }
-        r.into_view()
     }
 
     fn el_fragment(&self, children: Vec<Self::View>) -> Self::View {
@@ -151,18 +144,25 @@ impl WebFramework for MarkdownContext {
         link.set_attribute("integrity", integrity).unwrap();
         link.set_attribute("crossorigin", crossorigin).unwrap();
 
-        document.append_child(&link).unwrap();
+        document.head()
+            .unwrap()
+            .append_child(&link).unwrap();
     }
 
     fn el_input_checkbox(&self, checked: bool, attributes: ElementAttributes<Self>) -> Self::View {
-        let mut r = html::input().attr("checked", checked);
+        let mut r = html::input()
+            .attr("type", "checkbox")
+            .attr("checked", checked)
+        ;
         if let Some(c) = attributes.on_click {
             r = r.on(ev::click, move |e| Callable::call(&c, e));
         }
-        r = r.style("md", attributes.style.to_string());
         r = r.classes(attributes.classes.join(" "));
         if let Some(i) = attributes.inner_html {
             r = r.inner_html(i.to_string());
+        }
+        if let Some(s) = attributes.style {
+            r = r.attr("style", s.to_string())
         }
         r.into_view()
     }
