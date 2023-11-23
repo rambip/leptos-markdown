@@ -24,7 +24,7 @@ pub mod debug {
     pub struct EventInfo(pub WriteSignal<Vec<String>>);
 }
 
-impl Context<'static> for __MdProps {
+impl<'a> Context<'a, 'static> for &'a __MdProps {
     type View = View;
 
     type HtmlCallback<T: 'static> = Callback<T, leptos::HtmlElement<AnyElement>>;
@@ -33,7 +33,7 @@ impl Context<'static> for __MdProps {
 
     type Setter<T: 'static> = WriteSignal<T>;
 
-    fn props<'a>(&'a self) -> rust_web_markdown::MarkdownProps<'a, 'static, Self> {
+    fn props(self) -> rust_web_markdown::MarkdownProps<'a, 'static, Self> {
         rust_web_markdown::MarkdownProps {
             components: &self.components,
             frontmatter: self.frontmatter.as_ref(),
@@ -46,12 +46,12 @@ impl Context<'static> for __MdProps {
         }
     }
 
-    fn set<T: 'static>(&self, setter: &WriteSignal<T>, value: T) {
+    fn set<T: 'static>(self, setter: &WriteSignal<T>, value: T) {
         setter.set(value)
     }
 
     #[cfg(feature="debug")]
-    fn send_debug_info(&self, info: Vec<String>) {
+    fn send_debug_info(self, info: Vec<String>) {
         let set_event_info = use_context::<debug::EventInfo>();
 
         if let Some(setter) = set_event_info {
@@ -60,11 +60,11 @@ impl Context<'static> for __MdProps {
     }
 
     #[cfg(not(feature="debug"))]
-        fn send_debug_info(&self, _info: Vec<String>) {
+        fn send_debug_info(self, _info: Vec<String>) {
     }
 
     fn el_with_attributes(
-        &self,
+        self,
         e: HtmlElement,
         inside: Self::View,
         attributes: ElementAttributes<Callback<MouseEvent>>,
@@ -109,7 +109,7 @@ impl Context<'static> for __MdProps {
         r.into_view()
     }
 
-    fn el_hr(&self, attributes: ElementAttributes<Callback<MouseEvent>>) -> Self::View {
+    fn el_hr(self, attributes: ElementAttributes<Callback<MouseEvent>>) -> Self::View {
         let mut r = html::hr();
 
         if let Some(s) = attributes.style {
@@ -125,27 +125,27 @@ impl Context<'static> for __MdProps {
         r.into_view()
     }
 
-    fn el_br(&self) -> Self::View {
+    fn el_br(self) -> Self::View {
         view! {<br/>}.into_view()
     }
 
-    fn el_fragment(&self, children: Vec<Self::View>) -> Self::View {
+    fn el_fragment(self, children: Vec<Self::View>) -> Self::View {
         children.into_iter().collect()
     }
 
-    fn el_a(&self, children: Self::View, href: &str) -> Self::View {
+    fn el_a(self, children: Self::View, href: &str) -> Self::View {
         view! {<a href={href.to_string()}>{children}</a>}.into_view()
     }
 
-    fn el_img(&self, src: &str, alt: &str) -> Self::View {
+    fn el_img(self, src: &str, alt: &str) -> Self::View {
         view! {<img src={src.to_string()} alt={alt.to_string()}/>}.into_view()
     }
 
-    fn el_text(&self, text: &str) -> Self::View {
+    fn el_text(self, text: &str) -> Self::View {
         text.to_string().into_view()
     }
 
-    fn mount_dynamic_link(&self, rel: &str, href: &str, integrity: &str, crossorigin: &str) {
+    fn mount_dynamic_link(self, rel: &str, href: &str, integrity: &str, crossorigin: &str) {
         let document = document();
 
         let link = document.create_element("link").unwrap();
@@ -160,7 +160,7 @@ impl Context<'static> for __MdProps {
             .append_child(&link).unwrap();
     }
 
-    fn el_input_checkbox(&self, checked: bool, attributes: ElementAttributes<Callback<MouseEvent>>) -> Self::View {
+    fn el_input_checkbox(self, checked: bool, attributes: ElementAttributes<Callback<MouseEvent>>) -> Self::View {
         let mut r = html::input()
             .attr("type", "checkbox")
             .attr("checked", checked)
@@ -187,7 +187,7 @@ impl Context<'static> for __MdProps {
     }
 
     fn make_handler<T: 'static, F: Fn(T) + 'static>(
-        &self,
+        self,
         f: F,
     ) -> Self::Handler<T> {
         Callback::new(f)
