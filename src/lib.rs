@@ -1,22 +1,20 @@
 use rust_web_markdown::{
-    render_markdown, ElementAttributes, HtmlElement, WebFramework,
-    MdComponentProps as WMdComponentProps
+    render_markdown, ElementAttributes, HtmlElement, Context,
+    MdComponentProps as VMdComponentProps
 };
+
+pub type MdComponentProps = VMdComponentProps<View>;
 
 pub use rust_web_markdown::{
     LinkDescription, MarkdownMouseEvent, Options,
 };
 
-
-pub type MdComponentProps = WMdComponentProps<'static, MarkdownContext>;
+use web_sys::MouseEvent;
 
 use leptos::*;
 use leptos::html::AnyElement;
 
 use std::collections::HashMap;
-
-#[derive(Clone, Copy)]
-pub struct MarkdownContext {}
 
 
 #[cfg(feature="debug")]
@@ -26,14 +24,27 @@ pub mod debug {
     pub struct EventInfo(pub WriteSignal<Vec<String>>);
 }
 
-impl WebFramework<'static> for MarkdownContext {
+impl Context<'static> for __MdProps {
     type View = View;
 
     type HtmlCallback<T: 'static> = Callback<T, leptos::HtmlElement<AnyElement>>;
 
-    type Callback<A: 'static, B: 'static> = Callback<A, B>;
+    type Handler<T: 'static> = Callback<T, ()>;
 
     type Setter<T: 'static> = WriteSignal<T>;
+
+    fn props<'a>(&'a self) -> rust_web_markdown::MarkdownProps<'a, 'static, Self> {
+        rust_web_markdown::MarkdownProps {
+            components: &self.components,
+            frontmatter: self.frontmatter.as_ref(),
+            hard_line_breaks: self.hard_line_breaks.get(),
+            wikilinks: self.wikilinks.get(),
+            on_click: self.on_click.as_ref(),
+            parse_options: self.parse_options.as_ref(),
+            render_links: self.render_links.as_ref(),
+            theme: self.theme.as_deref(),
+        }
+    }
 
     fn set<T: 'static>(&self, setter: &WriteSignal<T>, value: T) {
         setter.set(value)
@@ -49,14 +60,14 @@ impl WebFramework<'static> for MarkdownContext {
     }
 
     #[cfg(not(feature="debug"))]
-    fn send_debug_info(&self, _info: Vec<String>) {
+        fn send_debug_info(&self, _info: Vec<String>) {
     }
 
     fn el_with_attributes(
         &self,
         e: HtmlElement,
         inside: Self::View,
-        attributes: ElementAttributes<'static, Self>,
+        attributes: ElementAttributes<Callback<MouseEvent>>,
     ) -> Self::View {
         let mut r: leptos::HtmlElement<AnyElement> = match e {
             HtmlElement::Div => html::div().into_any(),
@@ -98,7 +109,7 @@ impl WebFramework<'static> for MarkdownContext {
         r.into_view()
     }
 
-    fn el_hr(&self, attributes: ElementAttributes<'static, Self>) -> Self::View {
+    fn el_hr(&self, attributes: ElementAttributes<Callback<MouseEvent>>) -> Self::View {
         let mut r = html::hr();
 
         if let Some(s) = attributes.style {
@@ -149,7 +160,7 @@ impl WebFramework<'static> for MarkdownContext {
             .append_child(&link).unwrap();
     }
 
-    fn el_input_checkbox(&self, checked: bool, attributes: ElementAttributes<'static, Self>) -> Self::View {
+    fn el_input_checkbox(&self, checked: bool, attributes: ElementAttributes<Callback<MouseEvent>>) -> Self::View {
         let mut r = html::input()
             .attr("type", "checkbox")
             .attr("checked", checked)
@@ -167,7 +178,7 @@ impl WebFramework<'static> for MarkdownContext {
         r.into_view()
     }
 
-    fn call_callback<A: 'static, B: 'static>(callback: &Self::Callback<A, B>, input: A) -> B {
+    fn call_handler<T: 'static>(callback: &Self::Handler<T>, input: T) {
         Callable::call(callback, input)
     }
 
@@ -175,15 +186,18 @@ impl WebFramework<'static> for MarkdownContext {
         Callable::call(callback, input).into_view()
     }
 
-    fn make_callback<A: 'static, B: 'static, F: Fn(A) -> B + 'static>(
+    fn make_handler<T: 'static, F: Fn(T) + 'static>(
+        &self,
         f: F,
-    ) -> Self::Callback<A, B> {
+    ) -> Self::Handler<T> {
         Callback::new(f)
     }
 }
 
+
 #[component]
-pub fn Markdown(
+#[allow(unused)]
+pub fn __Md(
     /// the markdown text to render
     #[prop(into)]
     src: MaybeSignal<String>,
@@ -191,25 +205,25 @@ pub fn Markdown(
     /// the callback called when a component is clicked.
     /// if you want to controll what happens when a link is clicked,
     /// use [`render_links`][render_links]
-    #[prop(optional, into)] 
+    #[prop(optional, into)]
     on_click: Option<Callback<MarkdownMouseEvent>>,
 
     /// 
-    #[prop(optional, into)] 
-    render_links: Option<Callback<LinkDescription<'static, MarkdownContext>, leptos::HtmlElement<AnyElement>>>,
+    #[prop(optional, into)]
+    render_links: Option<Callback<LinkDescription<View>, leptos::HtmlElement<AnyElement>>>,
 
     /// the name of the theme used for syntax highlighting.
     /// Only the default themes of [syntect::Theme] are supported
-    #[prop(optional)] 
+    #[prop(optional, into)]
     theme: Option<String>,
 
     /// wether to enable wikilinks support.
     /// Wikilinks look like [[shortcut link]] or [[url|name]]
-    #[prop(into, default=false.into())]
+    #[prop(optional, into)]
     wikilinks: MaybeSignal<bool>,
 
     /// wether to convert soft breaks to hard breaks.
-    #[prop(into, default=false.into())]
+    #[prop(optional, into)]
     hard_line_breaks: MaybeSignal<bool>,
 
     /// pulldown_cmark options.
@@ -218,32 +232,16 @@ pub fn Markdown(
     parse_options: Option<Options>,
 
     #[prop(optional, into)]
-    components: HashMap<String, Callback<MdComponentProps, leptos::HtmlElement<AnyElement>>>,
+    components: HashMap<String, Callback<VMdComponentProps<View>, leptos::HtmlElement<AnyElement>>>,
 
     #[prop(optional, into)]
     frontmatter: Option<WriteSignal<String>>
-
-    ) -> impl IntoView 
-     {
-
-    move || src.with(|s| {
-         let props = rust_web_markdown::MarkdownProps {
-             components: &components,
-             frontmatter: frontmatter.as_ref(),
-             hard_line_breaks: hard_line_breaks.get(),
-             wikilinks: wikilinks.get(),
-             on_click: on_click.as_ref(),
-             parse_options: parse_options.as_ref(),
-             render_links: render_links.as_ref(),
-             theme: theme.as_deref(),
-     };
-
-
-        let cx = MarkdownContext {};
-        render_markdown(cx, s, props)
-    })
-    
-
-
+) -> impl IntoView {
+    ()
 }
 
+
+#[allow(non_snake_case)]
+pub fn Markdown(props: __MdProps) -> impl IntoView {
+    ::leptos::leptos_dom::Component::new("Test", move || render_markdown(&props, &props.src.get()))
+}
