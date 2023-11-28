@@ -1,12 +1,13 @@
 use rust_web_markdown::{
     render_markdown, ElementAttributes, HtmlElement, Context,
-    MdComponentProps as VMdComponentProps
+    MdComponentProps as VMdComponentProps,
+    CowStr
 };
 
 pub type MdComponentProps = VMdComponentProps<View>;
 
 pub use rust_web_markdown::{
-    LinkDescription, MarkdownMouseEvent, Options,
+    LinkDescription, Options,
 };
 
 use web_sys::MouseEvent;
@@ -15,6 +16,7 @@ use leptos::*;
 use leptos::html::AnyElement;
 
 use std::collections::HashMap;
+use core::ops::Range;
 
 
 #[cfg(feature="debug")]
@@ -22,6 +24,18 @@ pub mod debug {
     use super::*;
     #[derive(Copy, Clone)]
     pub struct EventInfo(pub WriteSignal<Vec<String>>);
+}
+
+#[derive(Clone, Debug)]
+pub struct MarkdownMouseEvent {
+    /// the original mouse event triggered when a text element was clicked on
+    pub mouse_event: MouseEvent,
+
+    /// the corresponding range in the markdown source, as a slice of [`u8`][u8]
+    pub position: Range<usize>,
+
+    // TODO: add a clonable tag for the type of the element
+    // pub tag: pulldown_cmark::Tag<'a>,
 }
 
 impl<'a> Context<'a, 'static> for &'a __MdProps {
@@ -39,7 +53,6 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
             frontmatter: self.frontmatter.as_ref(),
             hard_line_breaks: self.hard_line_breaks.get(),
             wikilinks: self.wikilinks.get(),
-            on_click: self.on_click.as_ref(),
             parse_options: self.parse_options.as_ref(),
             render_links: self.render_links.as_ref(),
             theme: self.theme.as_deref(),
@@ -133,15 +146,15 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
         children.into_iter().collect()
     }
 
-    fn el_a(self, children: Self::View, href: &str) -> Self::View {
+    fn el_a(self, children: Self::View, href: String) -> Self::View {
         view! {<a href={href.to_string()}>{children}</a>}.into_view()
     }
 
-    fn el_img(self, src: &str, alt: &str) -> Self::View {
+    fn el_img(self, src: String, alt: String) -> Self::View {
         view! {<img src={src.to_string()} alt={alt.to_string()}/>}.into_view()
     }
 
-    fn el_text(self, text: &str) -> Self::View {
+    fn el_text(self, text: CowStr<'a>) -> Self::View {
         text.to_string().into_view()
     }
 
@@ -191,6 +204,25 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
         f: F,
     ) -> Self::Handler<T> {
         Callback::new(f)
+    }
+
+    fn make_md_handler(self, position: Range<usize>, stop_propagation: bool) -> Self::Handler<MouseEvent> {
+        match self.on_click {
+            Some(f) => {
+                let position = position.clone();
+                Callback::new(move |e: MouseEvent| {
+                    if stop_propagation {
+                        e.stop_propagation()
+                    }
+                    let report = MarkdownMouseEvent {
+                        position: position.clone(),
+                        mouse_event: e
+                    };
+                    Callable::call(&f, report)
+                })
+            }
+            None => Callback::new(move |_| ())
+        }
     }
 }
 
