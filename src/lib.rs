@@ -116,9 +116,21 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
             r = r.on(ev::click, move |e| Callable::call(&c, e));
         }
         r = r.classes(attributes.classes.join(" "));
-        if let Some(i) = attributes.inner_html {
-            r = r.inner_html(i.to_string());
+        r.into_view()
+    }
+
+    fn el_span_with_inner_html(self, inner_html: String, attributes: ElementAttributes<Callback<MouseEvent>>) -> Self::View {
+        let mut r = view!{
+            <span inner_html=inner_html></span>
+        }.into_any();
+
+        if let Some(s) = attributes.style {
+            r = r.attr("style", s.to_string())
         }
+        if let Some(c) = attributes.on_click {
+            r = r.on(ev::click, move |e| Callable::call(&c, e));
+        }
+        r = r.classes(attributes.classes.join(" "));
         r.into_view()
     }
 
@@ -132,9 +144,6 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
             r = r.on(ev::click, move |e| Callable::call(&c, e));
         }
         r = r.classes(attributes.classes.join(" "));
-        if let Some(i) = attributes.inner_html {
-            r = r.inner_html(i.to_string());
-        }
         r.into_view()
     }
 
@@ -182,9 +191,6 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
             r = r.on(ev::click, move |e| Callable::call(&c, e));
         }
         r = r.classes(attributes.classes.join(" "));
-        if let Some(i) = attributes.inner_html {
-            r = r.inner_html(i.to_string());
-        }
         if let Some(s) = attributes.style {
             r = r.attr("style", s.to_string())
         }
