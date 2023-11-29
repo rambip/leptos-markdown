@@ -47,6 +47,8 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
 
     type Setter<T: 'static> = WriteSignal<T>;
 
+    type MouseEvent = MouseEvent;
+
     fn props(self) -> rust_web_markdown::MarkdownProps<'a, 'static, Self> {
         rust_web_markdown::MarkdownProps {
             components: &self.components,

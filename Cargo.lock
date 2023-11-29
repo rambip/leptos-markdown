@@ -1556,7 +1556,7 @@ dependencies = [
 [[package]]
 name = "rust-web-markdown"
 version = "0.1.0"
-source = "git+https://github.com/rambip/rust-web-markdown/#2cf3e390b6011153813f140ab84fd05a6886a337"
+source = "git+https://github.com/rambip/rust-web-markdown/#c2aae3239bad20cc716b78d08d7cb60926c76a44"
 dependencies = [
  "katex",
  "lazy_static",
