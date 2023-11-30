@@ -283,5 +283,5 @@ pub fn __Md(
 
 #[allow(non_snake_case)]
 pub fn Markdown(props: __MdProps) -> impl IntoView {
-    ::leptos::leptos_dom::Component::new("Test", move || render_markdown(&props, &props.src.get()))
+    move || render_markdown(&props, &props.src.get())
 }
