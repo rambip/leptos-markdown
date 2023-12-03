@@ -13,8 +13,9 @@ rust-web-markdown = { git = "https://github.com/rambip/rust-web-markdown/" }
 wasm-bindgen="=0.2.87"
 
 [features]
+
 default = []
-debug = []
+debug = ["rust-web-markdown/debug"]
 
 
 [workspace]

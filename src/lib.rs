@@ -75,7 +75,9 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
     }
 
     #[cfg(not(feature="debug"))]
-        fn send_debug_info(self, _info: Vec<String>) {
+    fn send_debug_info(self, info: Vec<String>) {
+        let set_debug_info = use_context::<debug::EventInfo>();
+        set_debug_info.set(info)
     }
 
     fn el_with_attributes(
