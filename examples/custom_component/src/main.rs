@@ -1,9 +1,7 @@
 use leptos::*;
 use leptos_markdown::*;
 
-use leptos::html::{HtmlElement, AnyElement};
-
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 
 #[component]
@@ -29,25 +27,13 @@ pub fn SimpleCounter(initial_value: i32) -> impl IntoView {
     }.into_any()
 }
 
-fn counter(props: MdComponentProps) -> HtmlElement<AnyElement> {
-    let initial: i32 = props.attributes.into_iter()
-        .find(|(name, _)| name=="initial")
-        .and_then(|(_, value)| value.parse().ok())
-        .unwrap_or(0);
-
-    view!{
-        <div>
-            <SimpleCounter initial_value=initial/>
-        </div>
-    }.into_any()
-}
-
-fn box_component(props: MdComponentProps) -> HtmlElement<AnyElement> {
+#[component]
+fn BlueBox(children: Children) -> impl IntoView {
     view!{
         <div style="border: 2px solid blue">
-            {props.children}
+            {children()}
         </div>
-    }.into_any()
+    }
 }
 
 static MARKDOWN: &'static str = r#"
@@ -82,9 +68,20 @@ static MARKDOWN: &'static str = r#"
 #[component]
 fn App(
     ) -> impl IntoView {
-    let mut components = HashMap::new();
-    components.insert("Counter".to_string(), Callback::new(counter));
-    components.insert("box".to_string(), Callback::new(box_component));
+    let mut components = BTreeMap::new();
+
+    components.insert("Counter".to_string(), Callback::new(
+        |props: MdComponentProps| view!{
+            <SimpleCounter initial_value=props.get_attribute("initial").unwrap()/>
+    }.into_view()));
+
+    components.insert("box".to_string(), Callback::new(
+        |props: MdComponentProps| view!{
+            <BlueBox>
+                {props.children}
+            </BlueBox>
+        }.into_view()
+    ));
 
     view!{
         <Markdown

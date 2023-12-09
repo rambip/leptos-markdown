@@ -15,7 +15,7 @@ use web_sys::MouseEvent;
 use leptos::*;
 use leptos::html::AnyElement;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use core::ops::Range;
 
 
@@ -41,7 +41,7 @@ pub struct MarkdownMouseEvent {
 impl<'a> Context<'a, 'static> for &'a __MdProps {
     type View = View;
 
-    type HtmlCallback<T: 'static> = Callback<T, leptos::HtmlElement<AnyElement>>;
+    type HtmlCallback<T: 'static> = Callback<T, leptos::View>;
 
     type Handler<T: 'static> = Callback<T, ()>;
 
@@ -199,7 +199,7 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
         Callable::call(callback, input)
     }
 
-    fn call_html_callback<T: 'static>(callback: &Self::HtmlCallback<T>, input: T) -> Self::View {
+    fn call_html_callback<T: 'static>(self, callback: &Self::HtmlCallback<T>, input: T) -> Self::View {
         Callable::call(callback, input).into_view()
     }
 
@@ -246,7 +246,7 @@ pub fn __Md(
 
     /// 
     #[prop(optional, into)]
-    render_links: Option<Callback<LinkDescription<View>, leptos::HtmlElement<AnyElement>>>,
+    render_links: Option<Callback<LinkDescription<View>, leptos::View>>,
 
     /// the name of the theme used for syntax highlighting.
     /// Only the default themes of [syntect::Theme] are supported
@@ -268,7 +268,7 @@ pub fn __Md(
     parse_options: Option<Options>,
 
     #[prop(optional, into)]
-    components: HashMap<String, Callback<VMdComponentProps<View>, leptos::HtmlElement<AnyElement>>>,
+    components: BTreeMap<String, Callback<VMdComponentProps<View>, leptos::View>>,
 
     #[prop(optional, into)]
     frontmatter: Option<WriteSignal<String>>
