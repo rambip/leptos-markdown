@@ -268,7 +268,7 @@ pub fn __Md(
     parse_options: Option<Options>,
 
     #[prop(optional, into)]
-    components: BTreeMap<String, Callback<VMdComponentProps<View>, leptos::View>>,
+    components: BTreeMap<&'static str, Callback<VMdComponentProps<View>, leptos::View>>,
 
     #[prop(optional, into)]
     frontmatter: Option<WriteSignal<String>>

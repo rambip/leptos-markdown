@@ -70,12 +70,12 @@ fn App(
     ) -> impl IntoView {
     let mut components = BTreeMap::new();
 
-    components.insert("Counter".to_string(), Callback::new(
+    components.insert("Counter", Callback::new(
         |props: MdComponentProps| view!{
             <SimpleCounter initial_value=props.get_attribute("initial").unwrap()/>
     }.into_view()));
 
-    components.insert("box".to_string(), Callback::new(
+    components.insert("box", Callback::new(
         |props: MdComponentProps| view!{
             <BlueBox>
                 {props.children}
