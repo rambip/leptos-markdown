@@ -1,7 +1,13 @@
 use leptos::*;
 use leptos_markdown::*;
 
-use std::collections::BTreeMap;
+// macro_rules! dbg {
+//     ($var:expr) => {{
+//         let x = $var;
+//         leptos::logging::log!("{:?}", x);
+//         x
+//     }}
+// }
 
 
 #[component]
@@ -24,7 +30,7 @@ pub fn SimpleCounter(initial_value: i32) -> impl IntoView {
             <span>"Value: " {value} "!"</span>
             <button on:click=increment>+1</button>
         </div>
-    }.into_any()
+    }
 }
 
 #[component]
@@ -36,26 +42,11 @@ fn BlueBox(children: Children) -> impl IntoView {
     }
 }
 
-static MARKDOWN: &'static str = r#"
-# The source
-```md
+static MARKDOWN_SOURCE: &'static str = r#"
 ## Here is a counter:
 <Counter initial="5"/>
 
-## Here is a Box:
-<box>
-
-**I am in a blue box !**
-
-</box>
-```
-
----
-
-# The result
-
-## Here is a counter:
-<Counter initial="5"/>
+<Counter initial="a"/>
 
 ## Here is a Box:
 <box>
@@ -66,27 +57,31 @@ static MARKDOWN: &'static str = r#"
 "#;
 
 #[component]
-fn App(
-    ) -> impl IntoView {
-    let mut components = BTreeMap::new();
+fn App() -> impl IntoView {
+    let mut components = CustomComponents::new();
 
-    components.insert("Counter", Callback::new(
-        |props: MdComponentProps| view!{
-            <SimpleCounter initial_value=props.get_attribute("initial").unwrap()/>
-    }.into_view()));
+    components.register("Counter", 
+        |props| Ok(view!{
+            <SimpleCounter initial_value=props.get("initial")?.parse()?/>
+        })
+    );
 
-    components.insert("box", Callback::new(
-        |props: MdComponentProps| view!{
-            <BlueBox>
-                {props.children}
-            </BlueBox>
-        }.into_view()
-    ));
+    components.register("box", 
+        |props| Ok(view!{
+            <BlueBox>{props.children}</BlueBox>
+        })
+    );
 
     view!{
+        <h1>"The source"</h1>
+        <Markdown
+            src=format!("```md\n{MARKDOWN_SOURCE}\n")
+        />
+        <br/>
+        <h1>"The result"</h1>
         <Markdown
             components=components
-            src=MARKDOWN
+            src=MARKDOWN_SOURCE
         />
     }
 }

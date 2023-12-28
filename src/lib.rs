@@ -1,13 +1,13 @@
 use rust_web_markdown::{
     render_markdown, ElementAttributes, HtmlElement, Context,
-    MdComponentProps as VMdComponentProps,
-    CowStr
+    CowStr,
+    MarkdownProps
 };
 
-pub type MdComponentProps = VMdComponentProps<View>;
+pub type MdComponentProps = rust_web_markdown::MdComponentProps<View>;
 
 pub use rust_web_markdown::{
-    LinkDescription, Options,
+    LinkDescription, Options, ComponentCreationError
 };
 
 use web_sys::MouseEvent;
@@ -38,31 +38,53 @@ pub struct MarkdownMouseEvent {
     // pub tag: pulldown_cmark::Tag<'a>,
 }
 
+
+/// component store.
+/// It is called when therer is a `<CustomComponent>` inside the markdown source.
+/// It is basically a hashmap but more efficient for a small number of items
+pub struct CustomComponents(BTreeMap<&'static str, 
+                                   Callback<MdComponentProps, Result<View, ComponentCreationError>>
+>);
+
+impl Default for CustomComponents {
+    fn default() -> Self {
+        Self (Default::default())
+    }
+}
+
+impl CustomComponents
+{
+    pub fn new() -> Self {
+        Self(Default::default())
+    }
+
+    /// register a new component.
+    /// The function `component` takes a context and props of type `MdComponentProps`
+    /// and returns html
+    pub fn register<F, I>(&mut self, name: &'static str, component: F)
+        where F: Fn(MdComponentProps) -> Result<I, ComponentCreationError> + 'static,
+              I: IntoView
+    {
+        let closure = move |props| component(props).map(|x| x.into_view());
+        self.0.insert(name, Callback::new(closure));
+    }
+}
+
+
 impl<'a> Context<'a, 'static> for &'a __MdProps {
     type View = View;
 
-    type HtmlCallback<T: 'static> = Callback<T, leptos::View>;
-
     type Handler<T: 'static> = Callback<T, ()>;
-
-    type Setter<T: 'static> = WriteSignal<T>;
 
     type MouseEvent = MouseEvent;
 
-    fn props(self) -> rust_web_markdown::MarkdownProps<'a, 'static, Self> {
-        rust_web_markdown::MarkdownProps {
-            components: &self.components,
-            frontmatter: self.frontmatter.as_ref(),
+    fn props(self) -> rust_web_markdown::MarkdownProps<'a> {
+        MarkdownProps {
             hard_line_breaks: self.hard_line_breaks.get(),
             wikilinks: self.wikilinks.get(),
             parse_options: self.parse_options.as_ref(),
-            render_links: self.render_links.as_ref(),
             theme: self.theme.as_deref(),
         }
-    }
-
-    fn set<T: 'static>(self, setter: &WriteSignal<T>, value: T) {
-        setter.set(value)
     }
 
     #[cfg(feature="debug")]
@@ -199,16 +221,6 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
         Callable::call(callback, input)
     }
 
-    fn call_html_callback<T: 'static>(self, callback: &Self::HtmlCallback<T>, input: T) -> Self::View {
-        Callable::call(callback, input).into_view()
-    }
-
-    fn make_handler<T: 'static, F: Fn(T) + 'static>(
-        self,
-        f: F,
-    ) -> Self::Handler<T> {
-        Callback::new(f)
-    }
 
     fn make_md_handler(self, position: Range<usize>, stop_propagation: bool) -> Self::Handler<MouseEvent> {
         match self.on_click {
@@ -227,6 +239,31 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
             }
             None => Callback::new(move |_| ())
         }
+    }
+
+    fn set_frontmatter(self, frontmatter: String) {
+        if let Some(setter) = self.frontmatter {
+            setter.set(frontmatter)
+        }
+    }
+
+    fn has_custom_links(self) -> bool {
+        self.render_links.is_some()
+    }
+
+    fn render_links(self, link: LinkDescription<Self::View>) 
+        -> Result<Self::View, String> {
+        Ok(Callable::call(&self.render_links.unwrap(), link))
+    }
+
+    fn has_custom_component(self, name: &str) -> bool {
+        self.components.0.get(name).is_some()
+    }
+
+    fn render_custom_component(self, name: &str, input: MdComponentProps) 
+        -> Result<Self::View, rust_web_markdown::ComponentCreationError> {
+        let f = self.components.0.get(name).unwrap();
+        f(input)
     }
 }
 
@@ -268,7 +305,7 @@ pub fn __Md(
     parse_options: Option<Options>,
 
     #[prop(optional, into)]
-    components: BTreeMap<&'static str, Callback<VMdComponentProps<View>, leptos::View>>,
+    components: CustomComponents,
 
     #[prop(optional, into)]
     frontmatter: Option<WriteSignal<String>>
