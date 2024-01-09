@@ -10,7 +10,7 @@ leptos = {version="0.5", features=["csr"]}
 
 rust-web-markdown = { git = "https://github.com/rambip/rust-web-markdown/" }
 
-wasm-bindgen="=0.2.87"
+wasm-bindgen="0.2"
 
 [features]
 
