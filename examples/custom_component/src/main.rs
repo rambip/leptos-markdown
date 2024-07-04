@@ -43,8 +43,10 @@ fn BlueBox(children: Children) -> impl IntoView {
 }
 
 static MARKDOWN_SOURCE: &'static str = r#"
-## Here is a counter:
+## Here are a few counters:
 <Counter initial="5"/>
+
+<Counter/>
 
 <Counter initial="a"/>
 
@@ -62,7 +64,7 @@ fn App() -> impl IntoView {
 
     components.register("Counter", 
         |props| Ok(view!{
-            <SimpleCounter initial_value=props.get("initial")?.parse()?/>
+            <SimpleCounter initial_value=props.get_parsed_optional("initial")?.unwrap_or(0)/>
         })
     );
 
