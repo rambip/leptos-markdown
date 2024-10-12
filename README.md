@@ -17,6 +17,7 @@ You can use this component to render both static and dynamic markdown.
 
 ```rust
 use leptos::*;
+use leptos_markdown::Markdown;
 
 {
     ...
