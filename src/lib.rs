@@ -263,7 +263,7 @@ impl<'a> Context<'a, 'static> for &'a __MdProps {
     fn render_custom_component(self, name: &str, input: MdComponentProps) 
         -> Result<Self::View, rust_web_markdown::ComponentCreationError> {
         let f = self.components.0.get(name).unwrap();
-        f(input)
+        f.call(input)
     }
 }
 
