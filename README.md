@@ -1,3 +1,9 @@
+# Disclaimer
+
+This project will move to **https://github.com/rambip/rust-web-markdown**
+
+ Be sure to check it out and to star the project !
+
 A zero-config but extendable markdown component for [leptos](https://www.leptos.dev/).
 
 It supports [commonmark](https://commonmark.org/), and so much more.
